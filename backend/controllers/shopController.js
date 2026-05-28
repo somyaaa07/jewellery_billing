@@ -1,21 +1,8 @@
-// =============================================
-// MODULE: controllers/shopController.js
-// KYA KARTA HAI: Super Admin shops manage karta hai
-// SUPER ADMIN KE KAAM:
-//   1. Naya shop create karo
-//   2. Shop admin account banao
-//   3. Subscription assign karo
-//   4. Shop activate/deactivate karo
-// =============================================
 
 import { Op } from 'sequelize';
 import { Shop, User, Subscription } from '../models/index.js';
 
-// ─────────────────────────────────────────────
-// GET ALL SHOPS
-// GET /api/shops
-// Only super_admin
-// ─────────────────────────────────────────────
+
 export const getAllShops = async (req, res) => {
   try {
     const shops = await Shop.findAll({
@@ -24,7 +11,7 @@ export const getAllShops = async (req, res) => {
           model: Subscription,
           as:    'subscriptions',
           where: { isActive: true },
-          required: false,  // LEFT JOIN — subscription nahi hai to bhi shop show karo
+          required: false,  
           order:    [['endDate', 'DESC']],
           limit:    1,
         },
@@ -39,11 +26,6 @@ export const getAllShops = async (req, res) => {
   }
 };
 
-// ─────────────────────────────────────────────
-// CREATE SHOP + ADMIN + SUBSCRIPTION
-// POST /api/shops
-// Super admin ek hi call mein sab kuch banata hai
-// ─────────────────────────────────────────────
 export const createShop = async (req, res) => {
   try {
     const {
@@ -63,8 +45,6 @@ export const createShop = async (req, res) => {
       address,   city, state, gstin,
     });
 
-    // ─ Step 2: Shop Admin account banao ───────
-    // Password User model ka beforeCreate hook hash karega
     const admin = await User.create({
       name:     adminName,
       email:    adminEmail,
@@ -73,7 +53,7 @@ export const createShop = async (req, res) => {
       shopId:   shop.id,
     });
 
-    // ─ Step 3: Subscription assign karo ───────
+    // ─ Step 3: Subscription assign  ───────
     const subscription = await Subscription.create({
       shopId:    shop.id,
       plan,
@@ -102,22 +82,19 @@ export const createShop = async (req, res) => {
   }
 };
 
-// ─────────────────────────────────────────────
-// RENEW SUBSCRIPTION
-// POST /api/shops/:shopId/renew
-// ─────────────────────────────────────────────
+
 export const renewSubscription = async (req, res) => {
   try {
     const { shopId } = req.params;
     const { plan, endDate, amount } = req.body;
 
-    // Purani subscription deactivate karo
+    // Purani subscription deactivate 
     await Subscription.update(
       { isActive: false },
       { where: { shopId } }
     );
 
-    // Nayi subscription banao
+
     const subscription = await Subscription.create({
       shopId,
       plan,
@@ -137,10 +114,6 @@ export const renewSubscription = async (req, res) => {
   }
 };
 
-// ─────────────────────────────────────────────
-// TOGGLE SHOP ACTIVE STATUS
-// PATCH /api/shops/:id/toggle
-// ─────────────────────────────────────────────
 export const toggleShopStatus = async (req, res) => {
   try {
     const shop = await Shop.findByPk(req.params.id);
@@ -184,8 +157,7 @@ export const getShopById = async (req, res) => {
   }
 };
 
-// GET /api/shops/expiring
-// Returns shops expiring in next 7 days
+
 export const getExpiringShops = async (req, res) => {
   try {
     const now     = new Date();

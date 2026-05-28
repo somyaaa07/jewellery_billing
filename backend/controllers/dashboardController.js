@@ -1,16 +1,8 @@
-// =============================================
-// MODULE: controllers/dashboardController.js
-// KYA KARTA HAI: Analytics data return karta hai
-// Dashboard pe yahi data charts mein dikhta hai
-// =============================================
 
 import { Op, fn, col, literal } from 'sequelize';
 import { Sale, Customer, Payment } from '../models/index.js';
 
-// ─────────────────────────────────────────────
-// MAIN DASHBOARD STATS
-// GET /api/dashboard/stats
-// ─────────────────────────────────────────────
+
 export const getDashboardStats = async (req, res) => {
   try {
     const shopId = req.user.shopId;
