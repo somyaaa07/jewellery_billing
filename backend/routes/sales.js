@@ -1,5 +1,4 @@
-// MODULE: routes/sales.js
-// =============================================
+
 import { Router } from 'express';
 import {
   createSale, getAllSales,

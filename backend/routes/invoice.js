@@ -11,11 +11,6 @@ import { subscriptionCheck } from '../middleware/roleCheck.js';
 import { viewInvoice, downloadInvoice,downloadInvoicePublic } from '../controllers/invoiceController.js';
 const router = Router();
 
-/**
- *  LOGIN REQUIRED (inside app)
- */
-
-// Browser mein PDF open karo
 router.get('/:saleId', auth, subscriptionCheck, async (req, res) => {
   try {
     const pdfBuffer = await generateInvoicePDF(
@@ -55,10 +50,7 @@ router.get('/:saleId/download', auth, subscriptionCheck, async (req, res) => {
 router.get('/:id',          auth, viewInvoice);
 router.get('/:id/download', auth, downloadInvoice);
 
-/**
- *  PUBLIC SHARE (WhatsApp link)
- * No login required
- */
+
 router.get('/public/:token/download', downloadInvoicePublic);
 
 export default router;

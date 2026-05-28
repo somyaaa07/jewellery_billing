@@ -1,9 +1,3 @@
-// =============================================
-// MODULE: models/Sale.js
-// KYA KARTA HAI: Main bill/invoice table
-// KYUN: Ek sale mein multiple items ho sakte hain
-//       isliye Sale aur SaleItem alag tables hain
-// =============================================
 
 import { DataTypes, Model } from 'sequelize';
 import sequelize from '../config/database.js';
@@ -105,24 +99,19 @@ Sale.init(
     dueAmount: {
       type:         DataTypes.DECIMAL(12, 2),
       defaultValue: 0,
-      // dueAmount = totalAmount - paidAmount
     },
     paymentMode: {
   type:         DataTypes.ENUM('cash', 'card', 'upi', 'cheque', 'bank_transfer'),
   defaultValue: 'cash',
-  // Primary payment mode for this sale
-  // Detailed payment history → Payment table
+
 },
 
 
     status: {
       type:         DataTypes.ENUM('paid', 'partial', 'due'),
       defaultValue: 'due',
-      // paid    = fully paid
-      // partial = kuch diya kuch baaki
-      // due     = kuch nahi diya
+
     },
-    // After the `notes` field, add:
 
     notes: {
       type: DataTypes.TEXT,

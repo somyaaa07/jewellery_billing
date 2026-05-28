@@ -162,11 +162,6 @@ if (data?.code === 'SHOP_INACTIVE') {
             </button>
           </form>
 
-          <div className="mt-6 pt-5 border-t border-gray-200 text-center">
-            <Link to="/register/super-admin" className="font-slab text-xs text-gray-400 hover:text-[#050a30] transition-colors">
-              First time? Register as Super Admin →
-            </Link>
-          </div>
         </div>
       </div>
     </div>

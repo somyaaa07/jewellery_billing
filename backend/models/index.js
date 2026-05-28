@@ -1,8 +1,4 @@
-// =============================================
-// MODULE: models/index.js (FIXED)
-// FIX 1: ExchangeItem ab apni alag file se import hota hai
-// FIX 2: Sab default imports hain — named import nahi
-// =============================================
+
 
 import sequelize    from '../config/database.js';
 import Shop         from './Shop.js';

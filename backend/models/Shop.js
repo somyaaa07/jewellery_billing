@@ -1,7 +1,4 @@
-// =============================================
-// MODULE: models/Shop.js (UPDATED)
-// Added: inviteToken fields for registration flow
-// =============================================
+
 
 import { DataTypes, Model } from 'sequelize';
 import sequelize from '../config/database.js';
@@ -22,21 +19,17 @@ Shop.init(
     logoUrl:     { type: DataTypes.STRING(255) },
     isActive:    { type: DataTypes.BOOLEAN, defaultValue: true },
 
-    // ── Invite Token Fields (Registration ke liye) ──
     inviteToken: {
       type:      DataTypes.STRING(64),
       allowNull: true,
-      // Crypto se generate hota hai — 32 byte hex = 64 chars
     },
     inviteTokenExpiry: {
       type:      DataTypes.DATE,
       allowNull: true,
-      // Generated time + 48 hours
     },
     inviteTokenUsed: {
       type:         DataTypes.BOOLEAN,
       defaultValue: false,
-      // true = admin register kar chuka hai, reuse nahi hoga
     },
   },
   {

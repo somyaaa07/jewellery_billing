@@ -1,6 +1,4 @@
-// =============================================
-// MODULE: routes/dashboard.js
-// =============================================
+
 import { Router } from 'express';
 import { getDashboardStats } from '../controllers/dashboardController.js';
 import auth from '../middleware/auth.js';

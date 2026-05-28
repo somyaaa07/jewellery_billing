@@ -2,14 +2,12 @@ import axios from 'axios';
 
 const api = axios.create({ baseURL: '/api', timeout: 15000 });
 
-// Har request mein JWT token auto-attach
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('jwtToken');
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
 
-// 401 aaye to auto logout
 api.interceptors.response.use(
   (r) => r,
   (error) => {

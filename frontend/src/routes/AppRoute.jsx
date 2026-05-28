@@ -63,11 +63,7 @@ export default function AppRoutes() {
   return (
     <Routes>
 
-      {/* ── ONLY Public route ── */}
-      {/* Sirf login page hi public hai                  */}
-      {/* /register/super-admin — NAHI hai               */}
-      {/* /register/shop-admin  — NAHI hai               */}
-      {/* Koi bhi in URLs pe jaye to / pe redirect hoga  */}
+  
       <Route path="/login"        element={<Login />} />
       <Route path="/unauthorized" element={<Unauthorized />} />
 

@@ -1,10 +1,4 @@
-// =============================================
-// MODULE: models/Customer.js
-// KYA KARTA HAI: Jewelry shop ke customers store karta hai
-// KYUN: Customer track karo — due, history, contact
-// MULTI-TENANT: shopId ensures Shop A ke customers
-//               Shop B ko KABHI nahi dikhenge
-// =============================================
+
 
 import { DataTypes, Model } from 'sequelize';
 import sequelize from '../config/database.js';
@@ -19,9 +13,7 @@ Customer.init(
       autoIncrement: true,
     },
 
-    // ★ MULTI-TENANT KEY ★
-    // Yeh column sabse important hai!
-    // Har customer ek specific shop ka hai
+
     shopId: {
       type:       DataTypes.INTEGER,
       allowNull:  false,
@@ -31,7 +23,6 @@ Customer.init(
     name: {
       type:      DataTypes.STRING(100),
       allowNull: false,
-      // Example: "Ramesh Kumar"
     },
 
     phone: {
@@ -54,14 +45,11 @@ Customer.init(
     totalDue: {
       type:         DataTypes.DECIMAL(10, 2),
       defaultValue: 0,
-      // Running total of unpaid amount
-      // Har naye bill ke baad update hota hai
-      // Example: ₹15,000 abhi bhi baaki hai
+  
     },
 
     notes: {
       type: DataTypes.TEXT,
-      // Shop ke private notes about customer
     },
   },
   {
@@ -70,7 +58,6 @@ Customer.init(
     tableName: 'customers',
 
     indexes: [
-      // Phone se customer dhundhna fast hoga
       { fields: ['shopId', 'phone'] },
     ],
   }

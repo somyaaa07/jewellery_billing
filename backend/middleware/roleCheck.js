@@ -16,12 +16,9 @@ export const roleCheck = (...allowedRoles) => {
 import { Subscription } from '../models/index.js';
 
 export const subscriptionCheck = async (req, res, next) => {
-  // Super admin ko subscription check nahi chahiye
+
   if (req.user.role === 'super_admin') return next();
 
-  // ✅ DEVELOPMENT MODE: subscription check skip karo
-  // .env mein NODE_ENV=development ho to bypass hoga
-  // Production mein NODE_ENV=production rakho — tab full check hoga
   if (process.env.NODE_ENV === 'production') {
     console.log('⚠️  [DEV MODE] Subscription check skipped for:', req.user.name);
     return next();

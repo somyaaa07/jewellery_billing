@@ -1,25 +1,3 @@
-// =============================================
-// MODULE: services/invoiceService.js
-// PREMIUM JEWELRY INVOICE — PDFKit
-//
-// 2 INVOICE TYPES:
-//   1. GST Invoice  — CGST + SGST shown, GSTIN required
-//   2. Non-GST Invoice — Simple bill, no tax breakdown
-//
-// DESIGN: Luxury Indian jewellery house aesthetic
-//   - Deep navy (#050A30) + warm gold (#B8973A) palette
-//   - Cormorant-inspired elegant section headers
-//   - Gold accent rules, ivory alternating rows
-//   - Exchange gold framed section
-//   - Payment stat summary + history timeline
-//
-// LIBRARY: PDFKit  →  npm install pdfkit
-//
-// FLOW:
-//   Controller → invoiceService.generateInvoicePDF(saleId, shopId)
-//   → PDF Buffer return hota hai
-//   → Controller res.send() se browser ko bhejta hai
-// =============================================
 
 import PDFDocument from 'pdfkit';
 import { Sale, SaleItem, Customer, Shop, Payment, ExchangeItem } from '../models/index.js';
@@ -63,9 +41,7 @@ const COL = {
   total:   470,
 };
 
-// ═══════════════════════════════════════════════
-// MAIN EXPORT
-// ═══════════════════════════════════════════════
+
 export const generateInvoicePDF = async (saleId, shopId) => {
 
   // ── Fetch data ──────────────────────────────
@@ -129,9 +105,6 @@ export const generateInvoicePDF = async (saleId, shopId) => {
 };
 
 
-// ═══════════════════════════════════════════════
-// GST INVOICE
-// ═══════════════════════════════════════════════
 const drawGSTInvoice = (doc, sale, shop) => {
   let y = drawHeader(doc, shop, sale, 'TAX INVOICE');
   y = drawGoldStrip(doc, sale, shop, y, true);
@@ -147,9 +120,7 @@ const drawGSTInvoice = (doc, sale, shop) => {
   // drawFooter(doc, shop);
 };
 
-// ═══════════════════════════════════════════════
-// NON-GST INVOICE
-// ═══════════════════════════════════════════════
+
 const drawNonGSTInvoice = (doc, sale, shop) => {
   let y = drawHeader(doc, shop, sale, 'Estimate Price');
   y = drawGoldStrip(doc, sale, shop, y, false);
@@ -165,11 +136,6 @@ const drawNonGSTInvoice = (doc, sale, shop) => {
   // drawFooter(doc, shop);
 };
 
-// ═══════════════════════════════════════════════
-// SECTION DRAWERS
-// ═══════════════════════════════════════════════
-
-// ── HEADER ──────────────────────────────────────
 const drawHeader = (doc, shop, sale, invoiceType) => {
   const H = 75;
 
@@ -649,13 +615,7 @@ const drawFooter = (doc, shop) => {
      );
 };
 
-// ═══════════════════════════════════════════════
-// UTILITY FUNCTIONS
-// ═══════════════════════════════════════════════
 
-// ── PAGE BREAK GUARD ──────────────────────────────
-// Adds a new page if `y + neededHeight` would overflow into the footer zone.
-// Always call this before drawing any block; returns the new y position.
 const checkPageBreak = (doc, y, neededHeight = 60) => {
   if (y + neededHeight > PAGE.height - FOOTER_SPACE) {
     doc.addPage();
@@ -677,7 +637,6 @@ const formatDate = (d) =>
     year:  'numeric',
   });
 
-// Amount to words — supports Crore / Lakh / Thousand
 const amountInWords = (amount) => {
   const ones = [
     '', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine',

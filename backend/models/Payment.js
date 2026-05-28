@@ -1,8 +1,3 @@
-// =============================================
-// MODULE: models/Payment.js
-// KYA KARTA HAI: Payment records store karta hai
-// FIX: ExchangeItem ko hataya — woh ab alag file mein hai
-// =============================================
 
 import { DataTypes, Model } from 'sequelize';
 import sequelize from '../config/database.js';
@@ -36,7 +31,6 @@ Payment.init(
     amount: {
       type:      DataTypes.DECIMAL(10, 2),
       allowNull: false,
-      // Is payment mein kitna diya — Example: ₹20,000
     },
 
     paymentDate: {
