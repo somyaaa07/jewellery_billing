@@ -53,36 +53,53 @@ export default function InvoiceView() {
       alert('Invoice download failed');
     }
   };
+const getPublicInvoiceUrl = async () => {
+  const token = localStorage.getItem('jwtToken');
+  const res = await fetch(`/api/invoice/${sale.id}/share-token`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error('Could not generate share link');
+  const { token: shareToken } = await res.json();
+  const base = import.meta.env.VITE_API_URL || window.location.origin;
+  return `${base}/api/invoice/public/${shareToken}`; // ✅ No login needed
+};
 
   // ── WhatsApp Share ──
-  const handleWhatsApp = () => {
-    const base       = import.meta.env.VITE_API_URL || window.location.origin;
-    const invoiceUrl = `${base}/api/invoice/${sale.id}/download`;
-    const message    = `Hello ${c.name || ''}, your invoice is ready:\n${invoiceUrl}`;
+const handleWhatsApp = async () => {
+  try {
+    const invoiceUrl = await getPublicInvoiceUrl();
+    const message = `Hello ${c.name || ''}, your invoice is ready:\n${invoiceUrl}`;
     window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
-  };
+  } catch (err) {
+    console.error(err);
+    alert('Could not generate WhatsApp link');
+  }
+};
 
-  // ── Email ──
-  const handleEmail = async () => {
-    if (!c.email) {
-      alert('Customer email not available');
-      return;
-    }
-    try {
-      const invoiceUrl = `${window.location.origin}/api/invoice/${sale.id}/download`;
-      const res = await fetch('/api/send-invoice', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ email: c.email, invoiceUrl }),
-      });
-      if (!res.ok) throw new Error('Email failed');
-      setEmailSent(true);
-      setTimeout(() => setEmailSent(false), 3000);
-    } catch (err) {
-      console.error(err);
-      alert('Email failed');
-    }
-  };
+
+const handleEmail = async () => {
+  if (!c.email) { alert('Customer email not available'); return; }
+  try {
+    const res = await fetch('/api/invoice/send-email', {   // ← new route
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${localStorage.getItem('jwtToken')}`,
+      },
+      body: JSON.stringify({
+        email:        c.email,
+        saleId:       sale.id,
+        customerName: c.name,
+      }),
+    });
+    if (!res.ok) throw new Error('Email failed');
+    setEmailSent(true);
+    setTimeout(() => setEmailSent(false), 3000);
+  } catch (err) {
+    console.error(err);
+    alert('Email failed');
+  }
+};
 
   return (
     <div className="max-w-3xl mx-auto space-y-4">
@@ -131,7 +148,7 @@ export default function InvoiceView() {
         <div className="bg-[#050a30] px-8 py-6 text-white">
           <div className="flex justify-between items-start">
             <div>
-              <h1 className="text-xl font-bold">{shop.name || 'Jewelry Shop'}</h1>
+              <h1 className="text-xl font-bold">{shop.name || 'New Fashion Jewellery'}</h1>
               {shop.address && (
                 <p className="text-white/60 text-xs mt-1">
                   {shop.address}{shop.city ? `, ${shop.city}` : ''}
