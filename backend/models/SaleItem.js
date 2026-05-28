@@ -86,6 +86,11 @@ SaleItem.init(
       // = (netWeight × goldRate) + makingCharges + stoneCharges
       // Example: (9.3 × 7200) + 500 = ₹67,460
     },
+  makingCharges: {
+  type:         DataTypes.DECIMAL(10, 2),
+  defaultValue: 0,
+  field:        'making_charges',   // ← DB column name batao Sequelize ko
+},
 
     quantity: {
       type:         DataTypes.INTEGER,

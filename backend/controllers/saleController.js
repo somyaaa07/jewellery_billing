@@ -4,133 +4,146 @@ import { sequelize, Sale, SaleItem, Customer, Payment, ExchangeItem } from '../m
 export const createSale = async (req, res) => {
   const t = await sequelize.transaction();
 
-    try {
-      const {
-        customerId,
-        items,
-        goldRate,
-        isGst,
-        exchangeItems,
-        discountAmount,
-        paidAmount,
-        paymentMode,   // ← yeh ab Sale mein nahi jayega — Payment table mein jayega
-        notes,
-      } = req.body;
-
-      console.log('req.user:', req.user);
-      console.log('items received:', items);
-
-      // shopId check
-      const shopId = req.user?.shopId;
-      if (!shopId) {
-        await t.rollback();
-        return res.status(400).json({
-          success: false,
-          message: 'shopId missing. Shop Admin ka token use karo.',
-        });
-      }
-
-      // items check
-      if (!items || !Array.isArray(items) || items.length === 0) {
-        await t.rollback();
-        return res.status(400).json({
-          success: false,
-          message: 'items array required hai.',
-        });
-      }
-
-      if (!customerId) {
-        await t.rollback();
-        return res.status(400).json({ success: false, message: 'customerId required hai' });
-      }
-
-      if (!goldRate) {
-        await t.rollback();
-        return res.status(400).json({ success: false, message: 'goldRate required hai' });
-      }
-
-      // Invoice Number
-      const count = await Sale.count({ where: { shopId } });
-      const year  = new Date().getFullYear();
-      const seq   = String(count + 1).padStart(4, '0');
-      const invoiceNumber = `INV-${shopId}-${year}-${seq}`;
-
-      // Items Calculate
-      let subtotal = 0;
-      const processedItems = items.map(item => {
-        const netWeight    = Math.max(0, parseFloat(item.grossWeight || 0) - parseFloat(item.stoneWeight || 0));
-        const goldValue    = netWeight * parseFloat(goldRate);
-        const making       = parseFloat(item.makingCharges || 0);
-        const stoneCharges = parseFloat(item.stoneCharges  || 0);
-        const itemTotal    = goldValue + making + stoneCharges;
-        subtotal += itemTotal;
-        return {
-          itemName:      item.itemName  || 'Item',
-          huid:          item.huid      || null,
-          purity:        item.purity    || '22K',
-          grossWeight:   parseFloat(item.grossWeight || 0),
-          stoneWeight:   parseFloat(item.stoneWeight || 0),
-          netWeight:     parseFloat(netWeight.toFixed(3)),
-          makingCharges: making,
-          stoneCharges,
-          itemTotal:     parseFloat(itemTotal.toFixed(2)),
-          quantity:      item.quantity  || 1,
-        };
-      });
-
-      // GST
-      const cgstAmount = isGst ? parseFloat((subtotal * 0.015).toFixed(2)) : 0;
-      const sgstAmount = isGst ? parseFloat((subtotal * 0.015).toFixed(2)) : 0;
-
-      // Exchange
-      let totalExchangeValue = 0;
-      const processedExchange = (exchangeItems || []).map(ex => {
-        const value = parseFloat(ex.grossWeight || 0) * parseFloat(ex.exchangeRate || 0);
-        totalExchangeValue += value;
-        return {
-          itemDescription: ex.itemDescription || 'Old Gold',
-          grossWeight:     parseFloat(ex.grossWeight  || 0),
-          purity:          ex.purity || '22K',
-          exchangeRate:    parseFloat(ex.exchangeRate || 0),
-          exchangeValue:   parseFloat(value.toFixed(2)),
-        };
-      });
-
-      // Final Total
-      const discount    = parseFloat(discountAmount || 0);
-      const totalAmount = parseFloat(
-        (subtotal + cgstAmount + sgstAmount - totalExchangeValue - discount).toFixed(2)
-      );
-      const paid   = parseFloat(paidAmount || 0);
-      const due    = parseFloat(Math.max(0, totalAmount - paid).toFixed(2));
-      const status = due <= 0 ? 'paid' : paid > 0 ? 'partial' : 'due';
-
-      // ── FIX: paymentMode: hata diya Sale.create se ────
-      // Sale table mein paymentMode column nahi hai
-      // Payment table mein store hota hai
-    const sale = await Sale.create(
-    {
-      shopId,
+  try {
+    const {
       customerId,
-      invoiceNumber,
-      saleDate:       new Date(),
-      goldRate:       parseFloat(goldRate),
-      isGst:          !!isGst,
-      subtotal:       parseFloat(subtotal.toFixed(2)),
-      cgstAmount,
-      sgstAmount,
-      exchangeValue:  parseFloat(totalExchangeValue.toFixed(2)),
-      discountAmount: discount,
-      totalAmount,
-      paidAmount:     paid,
-      dueAmount:      due,
-      status,
+      items,
+      goldRate,
+      isGst,
+      exchangeItems,
+      paidAmount,
+      paymentMode,
       notes,
-      paymentMode:    paymentMode || 'cash',   // ← ADD THIS
-    },
-    { transaction: t }
+    } = req.body;
+
+    console.log('req.user:', req.user);
+    console.log('items received:', items);
+    console.log('exchangeItems received:', exchangeItems);
+    console.log('paidAmount received:', paidAmount);
+
+    // shopId check
+    const shopId = req.user?.shopId;
+    if (!shopId) {
+      await t.rollback();
+      return res.status(400).json({
+        success: false,
+        message: 'shopId missing. Shop Admin ka token use karo.',
+      });
+    }
+
+    // items check
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      await t.rollback();
+      return res.status(400).json({
+        success: false,
+        message: 'items array required hai.',
+      });
+    }
+
+    if (!customerId) {
+      await t.rollback();
+      return res.status(400).json({ success: false, message: 'customerId required hai' });
+    }
+
+    if (!goldRate) {
+      await t.rollback();
+      return res.status(400).json({ success: false, message: 'goldRate required hai' });
+    }
+
+    // Invoice Number
+    const count = await Sale.count({ where: { shopId } });
+    const year  = new Date().getFullYear();
+    const seq   = String(count + 1).padStart(4, '0');
+    const invoiceNumber = `INV-${shopId}-${year}-${seq}`;
+
+    // Items Calculate
+    let subtotal = 0;
+    const processedItems = items.map(item => {
+      const netWeight  = Math.max(0, parseFloat(item.grossWeight || 0) - parseFloat(item.stoneWeight || 0));
+      const goldValue  = netWeight * parseFloat(goldRate);
+
+      // ── FIX: makingChargesPercent se calculate karo ──
+      const makingPercent = parseFloat(item.makingChargesPercent || 0);
+      const making = makingPercent > 0
+        ? parseFloat(((makingPercent / 100) * goldValue).toFixed(2))
+        : parseFloat(item.makingCharges || 0);  // fallback: flat amount
+
+      const stoneCharges = parseFloat(item.stoneCharges || 0);
+      const itemTotal    = goldValue + making + stoneCharges;
+      subtotal += itemTotal;
+
+      return {
+        itemName:      item.itemName  || 'Item',
+        huid:          item.huid      || null,
+        purity:        item.purity    || '22K',
+        grossWeight:   parseFloat(item.grossWeight || 0),
+        stoneWeight:   parseFloat(item.stoneWeight || 0),
+        netWeight:     parseFloat(netWeight.toFixed(3)),
+        makingCharges: making,         // ← ab sahi value store hogi
+        stoneCharges,
+        itemTotal:     parseFloat(itemTotal.toFixed(2)),
+        quantity:      item.quantity  || 1,
+      };
+    });
+
+    console.log('subtotal:', subtotal);
+
+    // GST
+    const cgstAmount = isGst ? parseFloat((subtotal * 0.015).toFixed(2)) : 0;
+    const sgstAmount = isGst ? parseFloat((subtotal * 0.015).toFixed(2)) : 0;
+
+    console.log('cgst:', cgstAmount, 'sgst:', sgstAmount);
+
+    // Exchange
+    let totalExchangeValue = 0;
+    const processedExchange = (exchangeItems || []).map(ex => {
+      const value = parseFloat(ex.grossWeight || 0) * parseFloat(ex.exchangeRate || 0);
+      totalExchangeValue += value;
+      return {
+        itemDescription: ex.itemDescription || 'Old Gold',
+        grossWeight:     parseFloat(ex.grossWeight  || 0),
+        purity:          ex.purity || '22K',
+        exchangeRate:    parseFloat(ex.exchangeRate || 0),
+        exchangeValue:   parseFloat(value.toFixed(2)),
+      };
+    });
+
+    console.log('totalExchangeValue:', totalExchangeValue);
+
+    // Final Total — discount nahi hai
+    const totalAmount = parseFloat(
+      (subtotal + cgstAmount + sgstAmount - totalExchangeValue).toFixed(2)
     );
-     
+
+    console.log('totalAmount (final):', totalAmount);
+
+    const paid   = parseFloat(paidAmount || 0);
+    const due    = parseFloat(Math.max(0, totalAmount - paid).toFixed(2));
+    const status = due <= 0 ? 'paid' : paid > 0 ? 'partial' : 'due';
+
+    const sale = await Sale.create(
+      {
+        shopId,
+        customerId,
+        invoiceNumber,
+        saleDate:       new Date(),
+        goldRate:       parseFloat(goldRate),
+        isGst:          !!isGst,
+        subtotal:       parseFloat(subtotal.toFixed(2)),
+        cgstAmount,
+        sgstAmount,
+        exchangeValue:  parseFloat(totalExchangeValue.toFixed(2)),
+        discountAmount: 0,
+        totalAmount,
+        paidAmount:     paid,
+        dueAmount:      due,
+        status,
+        notes,
+        paymentMode:    paymentMode || 'cash',
+      },
+      { transaction: t }
+    );
+
     // Save Items
     for (const item of processedItems) {
       await SaleItem.create({ ...item, saleId: sale.id }, { transaction: t });
@@ -141,9 +154,7 @@ export const createSale = async (req, res) => {
       await ExchangeItem.create({ ...ex, saleId: sale.id }, { transaction: t });
     }
 
-    // ── FIX: Payment create with paymentMode properly ──
-    // paid > 0 ho ya na ho — agar paidAmount 0 bhi hai
-    // tab bhi payment record banana better hai status track ke liye
+    // Payment record
     if (paid > 0) {
       await Payment.create(
         {
@@ -152,7 +163,7 @@ export const createSale = async (req, res) => {
           customerId,
           amount:      paid,
           paymentDate: new Date(),
-          paymentMode: paymentMode || 'cash',  // ← ab yahan sahi se aa raha hai
+          paymentMode: paymentMode || 'cash',
         },
         { transaction: t }
       );
@@ -172,7 +183,7 @@ export const createSale = async (req, res) => {
         { model: SaleItem,     as: 'items' },
         { model: ExchangeItem, as: 'exchangeItems' },
         { model: Customer,     as: 'customer' },
-        { model: Payment,      as: 'payments' },  
+        { model: Payment,      as: 'payments' },
       ],
     });
 
@@ -200,7 +211,6 @@ export const getAllSales = async (req, res) => {
 
     const shopId = req.user.shopId;
 
-    // base filter
     const where = { shopId };
 
     if (status) {
@@ -217,7 +227,6 @@ export const getAllSales = async (req, res) => {
       };
     }
 
-    // search filter (invoice + customer name + phone)
     const searchCondition = search
       ? {
           [Op.or]: [
@@ -233,23 +242,19 @@ export const getAllSales = async (req, res) => {
         ...where,
         ...searchCondition,
       },
-
       include: [
         {
           model: Customer,
           as: 'customer',
           attributes: ['id', 'name', 'phone'],
         },
-        { model: Payment, as: 'payments' },
+        { model: Payment,  as: 'payments' },
         { model: SaleItem, as: 'items' },
       ],
-
       order: [['createdAt', 'DESC']],
-
       limit: parseInt(limit),
       offset: (parseInt(page) - 1) * parseInt(limit),
-
-      subQuery: false, // IMPORTANT for search on include fields
+      subQuery: false,
     });
 
     return res.json({
@@ -269,7 +274,6 @@ export const getAllSales = async (req, res) => {
     });
   }
 };
-
 
 export const getSaleById = async (req, res) => {
   try {
@@ -339,7 +343,6 @@ export const addPayment = async (req, res) => {
 
     await t.commit();
 
-    // Updated sale return 
     const updatedSale = await Sale.findByPk(sale.id, {
       include: [
         { model: Payment,  as: 'payments' },
@@ -355,4 +358,3 @@ export const addPayment = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
-
