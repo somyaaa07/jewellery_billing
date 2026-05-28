@@ -1,8 +1,3 @@
-// =============================================
-// MODULE: server.js
-// KYA KARTA HAI: Main entry point — server start
-// COMMAND: node server.js  ya  npm run dev
-// =============================================
 
 import 'dotenv/config';
 import express  from 'express';
@@ -21,13 +16,12 @@ import emailRouter     from './routes/email.js';
 const app  = express();
 const PORT = process.env.PORT || 5000;
 
-// ─── CORS — dono frontend origins allow karo ───
 app.use(cors({
   origin: [
-    'http://localhost:5173',   // Vite frontend
-    'http://localhost:3000',   // CRA / old frontend
-    process.env.FRONTEND_URL, // .env se bhi le lo
-  ].filter(Boolean),          // undefined values hata do
+    'http://localhost:5173',   
+    'http://localhost:3000',   
+    process.env.FRONTEND_URL, 
+  ].filter(Boolean),          
   credentials: true,
 }));
 
@@ -64,8 +58,7 @@ app.use((err, req, res, next) => {
 const startServer = async () => {
   await testConnection();
 
-  // alter:true hata diya — purani tables ke saath hang karta tha
-  // sync() — tables nahi hain to banao, hain to reuse karo
+
   await sequelize.sync();
   console.log('✅ Database synced!');
 

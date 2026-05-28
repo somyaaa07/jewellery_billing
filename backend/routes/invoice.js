@@ -3,7 +3,7 @@ import nodemailer             from 'nodemailer';
 import { generateInvoicePDF } from '../services/invoiceService.js';
 import auth                   from '../middleware/auth.js';
 import { subscriptionCheck }  from '../middleware/roleCheck.js';
-
+import jwt from 'jsonwebtoken';
 const router = Router();
 
 // ── View inline ──────────────────────────────────────────────
@@ -76,5 +76,38 @@ router.post('/send-email', auth, async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 });
+// Generates a public link valid for 24 hours
+router.get('/:saleId/whatsapp-token', auth, async (req, res) => {
+  try {
+    const shareToken = jwt.sign(
+      { saleId: req.params.saleId, shopId: req.user.shopId },
+      process.env.JWT_SECRET,
+      { expiresIn: '24h' }
+    );
 
+    const base = process.env.VITE_API_URL || `https://jewellerbilling.deboxtechnology.com`;
+    const publicUrl = `${base}/api/invoice/public/${shareToken}/download`;
+
+    res.json({ publicUrl });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Public download — no auth, uses share token
+router.get('/public/:token/download', async (req, res) => {
+  try {
+    const decoded = jwt.verify(req.params.token, process.env.JWT_SECRET);
+    const pdfBuffer = await generateInvoicePDF(decoded.saleId, decoded.shopId);
+
+    res.set({
+      'Content-Type':        'application/pdf',
+      'Content-Disposition': `attachment; filename="invoice-${decoded.saleId}.pdf"`,
+      'Content-Length':       pdfBuffer.length,
+    });
+    res.send(pdfBuffer);
+  } catch (err) {
+    res.status(403).json({ message: 'Link expired or invalid' });
+  }
+});
 export default router;

@@ -13,9 +13,7 @@ import { roleCheck } from '../middleware/roleCheck.js';
 
 const router = Router();
 
-// ── ONLY truly public route ──────────────────
 router.post('/login', login);
-// need setup key for super admin
 router.post('/register/super-admin', registerSuperAdmin);
 
 

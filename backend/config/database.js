@@ -28,7 +28,7 @@ const sequelize = new Sequelize(
   }
 );
 
-// Connection test karo
+// Connection test 
 export const testConnection = async () => {
   try {
     await sequelize.authenticate();

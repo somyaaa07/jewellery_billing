@@ -67,15 +67,28 @@ const getPublicInvoiceUrl = async () => {
   // ── WhatsApp Share ──
 const handleWhatsApp = async () => {
   try {
-    const invoiceUrl = await getPublicInvoiceUrl();
-    const message = `Hello ${c.name || ''}, your invoice is ready:\n${invoiceUrl}`;
-    window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
+    // Generate a public download link on your server with a short-lived token
+    const token = localStorage.getItem('jwtToken');
+    const res = await fetch(`/api/invoice/${sale.id}/whatsapp-token`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (!res.ok) throw new Error('Failed');
+    const { publicUrl } = await res.json();
+
+    const message = `Hello ${c.name || ''}, your invoice is ready. Download here:\n${publicUrl}`;
+    const phone = c.phone?.replace(/\D/g, ''); // strip non-digits
+
+    // Open WhatsApp with phone number if available, otherwise just text
+    const waUrl = phone
+      ? `https://wa.me/91${phone}?text=${encodeURIComponent(message)}`
+      : `https://wa.me/?text=${encodeURIComponent(message)}`;
+
+    window.open(waUrl, '_blank');
   } catch (err) {
     console.error(err);
-    alert('Could not generate WhatsApp link');
+    alert('WhatsApp share failed');
   }
 };
-
 
 const handleEmail = async () => {
   if (!c.email) { alert('Customer email not available'); return; }
