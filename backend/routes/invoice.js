@@ -85,7 +85,7 @@ router.get('/:saleId/whatsapp-token', auth, async (req, res) => {
       { expiresIn: '24h' }
     );
 
-    const base = process.env.VITE_API_URL || `https://jewellerbilling.deboxtechnology.com`;
+    const base = process.env.VITE_API_URL || `https://ditbilling.store`;
     const publicUrl = `${base}/api/invoice/public/${shareToken}/download`;
 
     res.json({ publicUrl });
