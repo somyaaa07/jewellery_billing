@@ -122,7 +122,7 @@ export function Modal({ open, onClose, title, children, width = 'max-w-lg' }) {
 }
 
 // Empty state
-export function Empty({ icon = '📭', message = 'Koi data nahi hai' }) {
+export function Empty({ icon = '📭', message = 'No Data is available' }) {
   return (
     <div className="text-center py-16">
       <div className="text-5xl mb-3">{icon}</div>
