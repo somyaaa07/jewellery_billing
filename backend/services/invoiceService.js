@@ -1,19 +1,25 @@
-
 import PDFDocument from 'pdfkit';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { Sale, SaleItem, Customer, Shop, Payment, ExchangeItem } from '../models/index.js';
+
+// ── LOGO PATHS ────────────────────────────────────
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const LOGO_PATH     = path.join(__dirname, '../assets/logo.png');      // NFJ diamond logo
+const BIS_LOGO_PATH = path.join(__dirname, '../assets/bis-logo.png'); // BIS hallmark logo
 
 // ── BRAND TOKENS ────────────────────────────────
 const C = {
-  navy:        '#050A30',
-  navyMid:     '#0D1645',
-  gold:        '#B8973A',
-  goldLight:   '#E8D5A0',
-  goldLighter: '#F7F0DC',
-  ivory:       '#FAF8F4',
-  ink:         '#1A1A2E',
-  muted:       '#6B6880',
-  border:      '#DDD5B8',
-  rowAlt:      '#FDFBF5',
+  navy:        '#003399',
+  navyMid:     '#002277',
+  gold:        '#CC2200',
+  goldLight:   '#F7C8C0',
+  goldLighter: '#FFF0EE',
+  ivory:       '#F8FAFF',
+  ink:         '#111133',
+  muted:       '#556688',
+  border:      '#AABBD4',
+  rowAlt:      '#F4F7FF',
   success:     '#1A6B3A',
   warning:     '#7A4A10',
   danger:      '#7A1A1A',
@@ -30,21 +36,22 @@ const PAGE = {
   inner:   515,
 };
 
-// ── COLUMN MAP for items table ───────────────────
+// ── COLUMN MAP ────────────────────────────────────
 const COL = {
   item:    40,
-  purity:  195,
-  gross:   245,
-  stone:   295,
-  net:     345,
-  making:  395,
-  total:   470,
+  purity:  150,
+  gross:   190,
+  net:     230,
+  rate:    270,
+  huid:    320,
+  hsn:     374,
+  making:  416,
+  total:   466,
 };
 
 
 export const generateInvoicePDF = async (saleId, shopId) => {
 
-  // ── Fetch data ──────────────────────────────
   const sale = await Sale.findOne({
     where:   { id: saleId, shopId },
     include: [
@@ -59,32 +66,18 @@ export const generateInvoicePDF = async (saleId, shopId) => {
 
   const shop = await Shop.findByPk(shopId);
 
-  // ── Create PDFDocument ──────────────────────
-  // const doc = new PDFDocument({
-  //   size:    'A4',
-  //   margin:  PAGE.margin,
-  //   info: {
-  //     Title:   `Invoice  ${sale.invoiceNumber}`,
-  //     Author:  shop.name,
-  //     Subject: 'Jewelry Invoice',
-  //   },
-  // });
+  const doc = new PDFDocument({
+    size: 'A4',
+    margin: PAGE.margin,
+    info: {
+      Title: sale.isGst
+        ? `Invoice ${sale.invoiceNumber}`
+        : `Estimate Price ${sale.invoiceNumber}`,
+      Author:  shop.name,
+      Subject: sale.isGst ? 'Jewelry Invoice' : 'Jewelry Estimate',
+    },
+  });
 
- const doc = new PDFDocument({
-  size: 'A4',
-  margin: PAGE.margin,
-  info: {
-    Title: sale.isGst
-      ? `Invoice ${sale.invoiceNumber}`
-      : `Estimate Price ${sale.invoiceNumber}`,
-
-    Author: shop.name,
-
-    Subject: sale.isGst
-      ? 'Jewelry Invoice'
-      : 'Jewelry Estimate',
-  },
-});
   const buffers = [];
   doc.on('data', chunk => buffers.push(chunk));
 
@@ -93,7 +86,6 @@ export const generateInvoicePDF = async (saleId, shopId) => {
     doc.on('error', err => reject(err));
   });
 
-  // ── Draw ────────────────────────────────────
   if (sale.isGst) {
     drawGSTInvoice(doc, sale, shop);
   } else {
@@ -107,9 +99,9 @@ export const generateInvoicePDF = async (saleId, shopId) => {
 
 const drawGSTInvoice = (doc, sale, shop) => {
   let y = drawHeader(doc, shop, sale, 'TAX INVOICE');
-  y = drawGoldStrip(doc, sale, shop, y, true);
+  y = drawRateStrip(doc, sale, shop, y, true);
   y = drawBillingBlock(doc, sale, shop, y);
-  y = drawItemsTable(doc, sale.items, y);
+  y = drawItemsTable(doc, sale, y);
 
   if (sale.exchangeItems && sale.exchangeItems.length > 0) {
     y = drawExchangeSection(doc, sale.exchangeItems, y);
@@ -117,15 +109,14 @@ const drawGSTInvoice = (doc, sale, shop) => {
 
   y = drawGSTSummary(doc, sale, y);
   y = drawPaymentSection(doc, sale, y);
-  // drawFooter(doc, shop);
 };
 
 
 const drawNonGSTInvoice = (doc, sale, shop) => {
   let y = drawHeader(doc, shop, sale, 'Estimate Price');
-  y = drawGoldStrip(doc, sale, shop, y, false);
+  y = drawRateStrip(doc, sale, shop, y, false);
   y = drawBillingBlock(doc, sale, shop, y);
-  y = drawItemsTable(doc, sale.items, y);
+  y = drawItemsTable(doc, sale, y);
 
   if (sale.exchangeItems && sale.exchangeItems.length > 0) {
     y = drawExchangeSection(doc, sale.exchangeItems, y);
@@ -133,80 +124,124 @@ const drawNonGSTInvoice = (doc, sale, shop) => {
 
   y = drawSimpleSummary(doc, sale, y);
   y = drawPaymentSection(doc, sale, y);
-  // drawFooter(doc, shop);
 };
 
+
+// ── HEADER ────────────────────────────────────────
 const drawHeader = (doc, shop, sale, invoiceType) => {
-  const H = 75;
+  const H       = 100;
+  const centerX = PAGE.margin + PAGE.inner / 2;
 
-  doc.rect(PAGE.margin, PAGE.margin, PAGE.inner, H).fill(C.navy);
+  // White header background
+  doc.rect(PAGE.margin, PAGE.margin, PAGE.inner, H).fill(C.white);
 
-  doc.save();
-  doc.rect(PAGE.margin, PAGE.margin, PAGE.inner, H).clip();
-  doc.moveTo(PAGE.width - PAGE.margin - 140, PAGE.margin)
-     .lineTo(PAGE.width - PAGE.margin, PAGE.margin)
-     .lineTo(PAGE.width - PAGE.margin, PAGE.margin + H)
-     .lineTo(PAGE.width - PAGE.margin - 80, PAGE.margin + H)
-     .fill('rgba(184,151,58,0.12)');
-  doc.restore();
+  // ── Left logo (NFJ diamond logo) ──
+  const LOGO_SIZE = 90;
+  try {
+    doc.image(LOGO_PATH, PAGE.margin + 6, PAGE.margin + (H - LOGO_SIZE) / 2, {
+      width:  LOGO_SIZE,
+      height: LOGO_SIZE,
+      fit:    [LOGO_SIZE, LOGO_SIZE],
+    });
+  } catch (_) { /* logo file missing — skip silently */ }
 
-  doc.moveTo(PAGE.margin, PAGE.margin + H - 1)
-     .lineTo(PAGE.width - PAGE.margin, PAGE.margin + H - 1)
-     .lineWidth(0.8)
-     .stroke(C.gold);
+  // ── Right logo (BIS hallmark logo) ──
+  const BIS_SIZE = 90;
+  try {
+    doc.image(BIS_LOGO_PATH, PAGE.width - PAGE.margin - BIS_SIZE - 6, PAGE.margin + (H - BIS_SIZE) / 2, {
+      width:  BIS_SIZE,
+      height: BIS_SIZE,
+      fit:    [BIS_SIZE, BIS_SIZE],
+    });
+  } catch (_) { /* logo file missing — skip silently */ }
 
+  // ── Shop name — large red centered ──
   doc.fontSize(22)
-     .fillColor('#F5F2EA')
+     .fillColor('#CC2200')
      .font('Helvetica-Bold')
-     .text(shop.name.toUpperCase(), PAGE.margin + 12, PAGE.margin + 12, {
-       width: PAGE.inner - 180,
+     .text(shop.name.toUpperCase(), PAGE.margin + 70, PAGE.margin + 8, {
+       width: PAGE.inner - 140,
+       align: 'center',
        lineBreak: false,
      });
 
-  doc.fontSize(7.5)
-     .fillColor(C.goldLight)
-     .font('Helvetica')
-     .text(
-       [shop.address, shop.city, shop.phone].filter(Boolean).join('  ·  '),
-       PAGE.margin + 12,
-       PAGE.margin + 38,
-       { width: PAGE.inner - 180 }
-     );
+  // ── Tagline ──
+  if (shop.tagline) {
+    doc.fontSize(9)
+       .fillColor(C.navy)
+       .font('Helvetica-Bold')
+       .text(shop.tagline, PAGE.margin + 70, PAGE.margin + 34, {
+         width: PAGE.inner - 140,
+         align: 'center',
+       });
+  }
 
-  doc.fontSize(10)
-     .fillColor(C.gold)
+  // ── Address line ──
+  const addrLine = [shop.address, shop.city].filter(Boolean).join(', ');
+  if (addrLine) {
+    doc.fontSize(8.5)
+       .fillColor(C.navy)
+       .font('Helvetica')
+       .text(`Address : ${addrLine}`, PAGE.margin + 70, PAGE.margin + 47, {
+         width: PAGE.inner - 140,
+         align: 'center',
+       });
+  }
+
+  // ── Phone ──
+  if (shop.phone) {
+    doc.fontSize(8.5)
+       .fillColor(C.navy)
+       .font('Helvetica')
+       .text(`Mobile: ${shop.phone}`, PAGE.margin + 70, PAGE.margin + 59, {
+         width: PAGE.inner - 140,
+         align: 'center',
+       });
+  }
+
+  // ── Invoice type badge (top-right corner, inside header) ──
+  doc.fontSize(8)
+     .fillColor(C.navy)
      .font('Helvetica-Bold')
-     .text(invoiceType, PAGE.width - PAGE.margin - 170, PAGE.margin + 12, {
-       width: 158, align: 'right',
+     .text(invoiceType, PAGE.width - PAGE.margin - 130, PAGE.margin + 72, {
+       width: 124,
+       align: 'right',
      });
 
-  doc.fontSize(15)
-     .fillColor('#F5F2EA')
-     .font('Helvetica-Bold')
-     .text(sale.invoiceNumber, PAGE.width - PAGE.margin - 170, PAGE.margin + 27, {
-       width: 158, align: 'right',
-     });
-
-  doc.fontSize(8.5)
-     .fillColor('rgba(245,242,234,0.55)')
-     .font('Helvetica')
-     .text(formatDate(sale.saleDate), PAGE.width - PAGE.margin - 170, PAGE.margin + 48, {
-       width: 158, align: 'right',
-     });
+  // ── Bottom border in blue ──
+  doc.moveTo(PAGE.margin, PAGE.margin + H)
+     .lineTo(PAGE.width - PAGE.margin, PAGE.margin + H)
+     .lineWidth(1.5)
+     .stroke(C.navy);
 
   return PAGE.margin + H + 1;
 };
 
-// ── GOLD RATE STRIP ──────────────────────────────
-const drawGoldStrip = (doc, sale, shop, y, showGstin) => {
+
+// ── RATE STRIP (Gold + Silver) ────────────────────
+const drawRateStrip = (doc, sale, shop, y, showGstin) => {
+  const hasSilver = sale.silverRate && parseFloat(sale.silverRate) > 0;
+  const hasGold   = sale.goldRate   && parseFloat(sale.goldRate)   > 0;
   const H = 22;
 
   doc.rect(PAGE.margin, y, PAGE.inner, H).fill(C.goldLighter);
 
-  doc.fontSize(8).fillColor(C.muted).font('Helvetica');
-  doc.text('Gold Rate', PAGE.margin + 12, y + 7);
-  doc.fontSize(9).fillColor(C.ink).font('Helvetica-Bold');
-  doc.text(`Rs.${fmtAmt(sale.goldRate)}/g`, PAGE.margin + 60, y + 6);
+  let textX = PAGE.margin + 12;
+
+  if (hasGold) {
+    doc.fontSize(8).fillColor(C.muted).font('Helvetica')
+       .text('Gold Rate', textX, y + 7);
+    doc.fontSize(9).fillColor(C.ink).font('Helvetica-Bold')
+       .text(`Rs.${fmtAmt(sale.goldRate)}/g`, textX + 52, y + 6);
+    textX += 130;
+  }
+
+  if (hasSilver) {
+    doc.fontSize(8).fillColor(C.muted).font('Helvetica')
+       .text('Silver Rate', textX, y + 7);
+    doc.fontSize(9).fillColor(C.ink).font('Helvetica-Bold')
+       .text(`Rs.${fmtAmt(sale.silverRate)}/g`, textX + 55, y + 6);
+  }
 
   if (showGstin && shop.gstin) {
     const badgeW = 155;
@@ -224,9 +259,10 @@ const drawGoldStrip = (doc, sale, shop, y, showGstin) => {
   return y + H + 1;
 };
 
+
 // ── BILLING BLOCK ────────────────────────────────
 const drawBillingBlock = (doc, sale, shop, y) => {
-  const startY = y + 14;
+  const startY   = y + 14;
   const customer = sale.customer;
 
   doc.fontSize(7.5).fillColor(C.gold).font('Helvetica-Bold')
@@ -250,10 +286,14 @@ const drawBillingBlock = (doc, sale, shop, y) => {
   doc.fontSize(7.5).fillColor(C.gold).font('Helvetica-Bold')
      .text('INVOICE DETAILS', rX, startY, { characterSpacing: 1.5, width: 195, align: 'right' });
 
+  const hasSilver = sale.silverRate && parseFloat(sale.silverRate) > 0;
+  const hasGold   = sale.goldRate   && parseFloat(sale.goldRate)   > 0;
+
   const metaRows = [
     [`Invoice No.`, sale.invoiceNumber],
     [`Date`,        formatDate(sale.saleDate)],
-    [`Gold Rate`,   `Rs.${fmtAmt(sale.goldRate)}/g`],
+    ...(hasGold   ? [[`Gold Rate`,   `Rs.${fmtAmt(sale.goldRate)}/g`]]   : []),
+    ...(hasSilver ? [[`Silver Rate`, `Rs.${fmtAmt(sale.silverRate)}/g`]] : []),
   ];
 
   let mY = startY + 11;
@@ -275,8 +315,11 @@ const drawBillingBlock = (doc, sale, shop, y) => {
   return endY + 14;
 };
 
+
 // ── ITEMS TABLE ───────────────────────────────────
-const drawItemsTable = (doc, items, y) => {
+const drawItemsTable = (doc, sale, y) => {
+  const items = sale.items || [];
+
   doc.fontSize(7.5).fillColor(C.gold).font('Helvetica-Bold')
      .text('ITEMS PURCHASED', PAGE.margin, y, { characterSpacing: 1.5 });
 
@@ -286,53 +329,82 @@ const drawItemsTable = (doc, items, y) => {
 
   doc.rect(PAGE.margin, y, PAGE.inner, HEADER_H).fill(C.navy);
 
-  doc.fontSize(7.5).fillColor(C.white).font('Helvetica-Bold');
-  doc.text('ITEM',      COL.item,   y + 7);
-  doc.text('PURITY',    COL.purity, y + 7, { width: 45, align: 'center' });
-  doc.text('GROSS(g)',  COL.gross,  y + 7, { width: 45, align: 'right' });
-  doc.text('STONE(g)',  COL.stone,  y + 7, { width: 45, align: 'right' });
-  doc.text('NET(g)',    COL.net,    y + 7, { width: 45, align: 'right' });
-  doc.text('MAKING',   COL.making, y + 7, { width: 70, align: 'right' });
-  doc.text('TOTAL',    COL.total,  y + 7, { width: 85, align: 'right' });
+  doc.fontSize(7).fillColor(C.white).font('Helvetica-Bold');
+  doc.text('ITEM',      COL.item,   y + 7, { width: 105 });
+  doc.text('PURITY',    COL.purity, y + 7, { width: 36,  align: 'center' });
+  doc.text('GROSS(g)',  COL.gross,  y + 7, { width: 36,  align: 'right'  });
+  doc.text('NET(g)',    COL.net,    y + 7, { width: 36,  align: 'right'  });
+  doc.text('RATE',      COL.rate,   y + 7, { width: 46,  align: 'right'  });
+  doc.text('HUID',      COL.huid,   y + 7, { width: 50,  align: 'center' });
+  doc.text('HSN',       COL.hsn,    y + 7, { width: 38,  align: 'center' });
+  doc.text('MAKING',    COL.making, y + 7, { width: 46,  align: 'right'  });
+  doc.text('TOTAL',     COL.total,  y + 7, { width: 86,  align: 'right'  });
 
   y += HEADER_H;
 
   items.forEach((item, idx) => {
-    const hasHuid = !!item.huid;
-    const ROW_H = hasHuid ? 30 : 22;
+    const ROW_H = 26;
 
-    // ── FIX: check page break before each row ──
     y = checkPageBreak(doc, y, ROW_H + 10);
 
     if (idx % 2 === 1) {
       doc.rect(PAGE.margin, y, PAGE.inner, ROW_H).fill(C.rowAlt);
     }
 
-    const textY = y + (hasHuid ? 5 : 7);
+    const textY  = y + 8;
+    const isGold = !item.metalType || item.metalType === 'gold';
 
-    doc.fontSize(9).fillColor(C.ink).font('Helvetica-Bold')
-       .text(item.itemName, COL.item, textY, { width: 145, lineBreak: false });
+    const itemRate = item.rate
+      ? parseFloat(item.rate)
+      : isGold
+        ? parseFloat(sale.goldRate || 0)
+        : parseFloat(sale.silverRate || 0);
 
-    if (hasHuid) {
+    doc.fontSize(8.5).fillColor(C.ink).font('Helvetica-Bold')
+       .text(item.itemName, COL.item, textY, { width: 105, lineBreak: false });
+
+    doc.fontSize(6).fillColor(C.muted).font('Helvetica')
+       .text(isGold ? 'GOLD' : 'SILVER', COL.item, y + 17, { width: 40 });
+
+    if (isGold && item.purity) {
+      const pX = COL.purity + 1;
+      const pW = 34;
+      doc.roundedRect(pX, y + 6, pW, 13, 3).fill(C.goldLighter);
+      doc.fontSize(7).fillColor(C.gold).font('Helvetica-Bold')
+         .text(item.purity, pX, y + 10, { width: pW, align: 'center' });
+    } else if (!isGold && item.purity) {
       doc.fontSize(7).fillColor(C.muted).font('Helvetica')
-         .text(`HUID: ${item.huid}`, COL.item, textY + 13, { width: 145 });
+         .text(item.purity, COL.purity, textY, { width: 36, align: 'center' });
+    } else {
+      doc.fontSize(8).fillColor(C.muted).font('Helvetica')
+         .text('—', COL.purity, textY, { width: 36, align: 'center' });
     }
 
-    const purity = item.purity || '22K';
-    const pX = COL.purity + 2;
-    const pW = 38;
-    doc.roundedRect(pX, y + 6, pW, 14, 3).fill(C.goldLighter);
-    doc.fontSize(7.5).fillColor(C.gold).font('Helvetica-Bold')
-       .text(purity, pX, y + 10, { width: pW, align: 'center' });
+    doc.fontSize(8).fillColor(C.ink).font('Helvetica');
+    doc.text(parseFloat(item.grossWeight).toFixed(3), COL.gross, textY, { width: 36, align: 'right' });
+    doc.text(parseFloat(item.netWeight).toFixed(3),   COL.net,   textY, { width: 36, align: 'right' });
 
-    doc.fontSize(8.5).fillColor(C.ink).font('Helvetica');
-    doc.text(parseFloat(item.grossWeight).toFixed(3), COL.gross,  textY, { width: 45, align: 'right' });
-    doc.text(parseFloat(item.stoneWeight).toFixed(3), COL.stone,  textY, { width: 45, align: 'right' });
-    doc.text(parseFloat(item.netWeight).toFixed(3),   COL.net,    textY, { width: 45, align: 'right' });
-    doc.text(`Rs.${fmtAmt(item.makingCharges)}`,      COL.making, textY, { width: 70, align: 'right' });
+    doc.fontSize(7.5).fillColor(C.ink).font('Helvetica')
+       .text(`Rs.${fmtAmt(itemRate)}`, COL.rate, textY, { width: 46, align: 'right' });
 
-    doc.fontSize(9.5).fillColor(C.navy).font('Helvetica-Bold')
-       .text(`Rs.${fmtAmt(item.itemTotal)}`, COL.total, textY, { width: 85, align: 'right' });
+    const huidText = item.huid ? String(item.huid) : '—';
+    doc.fontSize(7.5).fillColor(item.huid ? C.ink : C.muted).font('Helvetica')
+       .text(huidText, COL.huid, textY, { width: 50, align: 'center' });
+
+    const hsnText = item.hsnCode ? String(item.hsnCode) : '—';
+    doc.fontSize(7.5).fillColor(item.hsnCode ? C.ink : C.muted).font('Helvetica')
+       .text(hsnText, COL.hsn, textY, { width: 38, align: 'center' });
+
+    if (isGold && item.makingCharges != null) {
+      doc.fontSize(8).fillColor(C.ink).font('Helvetica')
+         .text(`Rs.${fmtAmt(item.makingCharges)}`, COL.making, textY, { width: 46, align: 'right' });
+    } else {
+      doc.fontSize(8).fillColor(C.muted).font('Helvetica')
+         .text('—', COL.making, textY, { width: 46, align: 'right' });
+    }
+
+    doc.fontSize(9).fillColor(C.navy).font('Helvetica-Bold')
+       .text(`Rs.${fmtAmt(item.itemTotal)}`, COL.total, textY, { width: 86, align: 'right' });
 
     doc.moveTo(PAGE.margin, y + ROW_H)
        .lineTo(PAGE.width - PAGE.margin, y + ROW_H)
@@ -345,13 +417,13 @@ const drawItemsTable = (doc, items, y) => {
   return y + 12;
 };
 
+
 // ── EXCHANGE SECTION ──────────────────────────────
 const drawExchangeSection = (doc, exchangeItems, y) => {
   const PADDING  = 10;
   const rowCount = exchangeItems.length;
   const boxH     = 20 + 18 + rowCount * 18 + PADDING;
 
-  // ── FIX: check page break with actual box height ──
   y = checkPageBreak(doc, y, boxH + 20);
 
   doc.rect(PAGE.margin, y, PAGE.inner, boxH)
@@ -390,9 +462,9 @@ const drawExchangeSection = (doc, exchangeItems, y) => {
   return y + boxH + 14;
 };
 
+
 // ── GST SUMMARY ───────────────────────────────────
 const drawGSTSummary = (doc, sale, y) => {
-  // ── FIX: check page break for entire summary block ──
   y = checkPageBreak(doc, y, 120);
 
   const sX   = 350;
@@ -434,9 +506,9 @@ const drawGSTSummary = (doc, sale, y) => {
   return y + 28;
 };
 
+
 // ── SIMPLE (NON-GST) SUMMARY ──────────────────────
 const drawSimpleSummary = (doc, sale, y) => {
-  // ── FIX: check page break for entire summary block ──
   y = checkPageBreak(doc, y, 100);
 
   const sX   = 350;
@@ -481,7 +553,8 @@ const drawSimpleSummary = (doc, sale, y) => {
   return y + 28;
 };
 
-// ── AMOUNT IN WORDS (left side of summary) ────────
+
+// ── AMOUNT IN WORDS ───────────────────────────────
 const drawAmountInWords = (doc, amount, y) => {
   doc.rect(PAGE.margin, y, 3, 34).fill(C.gold);
   doc.rect(PAGE.margin + 3, y, 280, 34).fill(C.goldLighter);
@@ -493,19 +566,18 @@ const drawAmountInWords = (doc, amount, y) => {
      .text(amountInWords(parseFloat(amount)), PAGE.margin + 10, y + 18, { width: 265 });
 };
 
+
 // ── PAYMENT SECTION ───────────────────────────────
 const drawPaymentSection = (doc, sale, y) => {
-  // ── FIX: check page break for header + stat block ──
   y = checkPageBreak(doc, y, 80);
 
   const statusMap = {
-    paid:    { label: 'FULLY PAID',       bg: '#EAF5EE', text: C.success,  border: 'rgba(26,107,58,0.4)' },
-    partial: { label: 'PARTIALLY PAID',   bg: '#FEF5E7', text: C.warning,  border: 'rgba(122,74,16,0.4)' },
-    due:     { label: 'PAYMENT DUE',      bg: '#FEF0EF', text: C.danger,   border: 'rgba(122,26,26,0.4)' },
+    paid:    { label: 'FULLY PAID',     bg: '#EAF5EE', text: C.success, border: 'rgba(26,107,58,0.4)'  },
+    partial: { label: 'PARTIALLY PAID', bg: '#FEF5E7', text: C.warning, border: 'rgba(122,74,16,0.4)'  },
+    due:     { label: 'PAYMENT DUE',    bg: '#FEF0EF', text: C.danger,  border: 'rgba(122,26,26,0.4)'  },
   };
   const st = statusMap[sale.status] || statusMap.due;
 
-  // Section header bar
   doc.rect(PAGE.margin, y, PAGE.inner, 22).fill(C.ivory)
      .strokeColor(C.border).lineWidth(0.4).stroke();
 
@@ -522,12 +594,11 @@ const drawPaymentSection = (doc, sale, y) => {
 
   y += 24;
 
-  // Stat row — 3 columns
   const statW = PAGE.inner / 3;
   const stats = [
-    { label: 'Total Amount',  value: `Rs.${fmtAmt(sale.totalAmount)}`,  color: C.ink },
-    { label: 'Paid Amount',   value: `Rs.${fmtAmt(sale.paidAmount)}`,   color: C.success },
-    { label: 'Due Amount',    value: `Rs.${fmtAmt(sale.dueAmount)}`,    color: parseFloat(sale.dueAmount) > 0 ? C.danger : C.muted },
+    { label: 'Total Amount', value: `Rs.${fmtAmt(sale.totalAmount)}`, color: C.ink     },
+    { label: 'Paid Amount',  value: `Rs.${fmtAmt(sale.paidAmount)}`,  color: C.success },
+    { label: 'Due Amount',   value: `Rs.${fmtAmt(sale.dueAmount)}`,   color: parseFloat(sale.dueAmount) > 0 ? C.danger : C.muted },
   ];
 
   stats.forEach((stat, i) => {
@@ -544,9 +615,7 @@ const drawPaymentSection = (doc, sale, y) => {
 
   y += 42;
 
-  // Payment history
   if (sale.payments && sale.payments.length > 0) {
-    // ── FIX: check page break before history heading ──
     y = checkPageBreak(doc, y, 28);
 
     doc.fontSize(7.5).fillColor(C.gold).font('Helvetica-Bold')
@@ -554,7 +623,6 @@ const drawPaymentSection = (doc, sale, y) => {
     y += 20;
 
     sale.payments.forEach((pmt, i) => {
-      // ── FIX: check page break before each payment row ──
       y = checkPageBreak(doc, y, 22);
 
       if (i % 2 === 0) {
@@ -582,39 +650,8 @@ const drawPaymentSection = (doc, sale, y) => {
   return y + 4;
 };
 
-// ── FOOTER ────────────────────────────────────────
-const drawFooter = (doc, shop) => {
-  const fY = PAGE.height - 70;
 
-  doc.moveTo(PAGE.margin, fY).lineTo(PAGE.width - PAGE.margin, fY)
-     .lineWidth(0.6).stroke(C.gold);
-
-  const sigW = 150;
-
-  doc.moveTo(PAGE.margin, fY + 35).lineTo(PAGE.margin + sigW, fY + 35)
-     .lineWidth(0.4).stroke(C.border);
-  doc.fontSize(7.5).fillColor(C.muted).font('Helvetica')
-     .text('Customer Signature', PAGE.margin, fY + 39, { width: sigW, align: 'center' });
-
-  const authX = PAGE.width - PAGE.margin - sigW;
-  doc.moveTo(authX, fY + 35).lineTo(authX + sigW, fY + 35)
-     .lineWidth(0.4).stroke(C.border);
-  doc.fontSize(7.5).fillColor(C.muted).font('Helvetica')
-     .text(`Authorized Signatory\n${shop.name}`, authX, fY + 39, { width: sigW, align: 'center' });
-
-  doc.fontSize(8).fillColor('rgba(184,151,58,0.4)').font('Helvetica')
-     .text(`— ${shop.name.toUpperCase()} —`, PAGE.margin, fY + 42, {
-       width: PAGE.inner, align: 'center',
-     });
-
-  doc.fontSize(7).fillColor('rgba(107,104,128,0.55)').font('Helvetica')
-     .text(
-       'This is a computer generated invoice.  ·  Thank you for your purchase!',
-       PAGE.margin, fY + 56,
-       { width: PAGE.inner, align: 'center' }
-     );
-};
-
+// ── UTILITIES ─────────────────────────────────────
 
 const checkPageBreak = (doc, y, neededHeight = 60) => {
   if (y + neededHeight > PAGE.height - FOOTER_SPACE) {
@@ -626,8 +663,8 @@ const checkPageBreak = (doc, y, neededHeight = 60) => {
 
 const fmtAmt = (n) =>
   parseFloat(n || 0).toLocaleString('en-IN', {
-    minimumFractionDigits:  2,
-    maximumFractionDigits:  2,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
   });
 
 const formatDate = (d) =>

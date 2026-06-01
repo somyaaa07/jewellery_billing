@@ -19,6 +19,7 @@ import Reports        from '../pages/shop-admin/Reports';
 import Settings       from '../pages/shop-admin/Settings';
 import CustomerDetail from '../pages/shop-admin/CustomerDetail';
 import PaymentDetailPage from '../pages/shop-admin/PaymentDetail';
+import AdvancePayments from '../pages/shop-admin/AdvancePayments';
 
 // Pages — Super Admin
 import SuperDashboard from '../pages/super-admin/Dashboard';
@@ -83,6 +84,7 @@ export default function AppRoutes() {
         <Route path="/invoice/:id"      element={<InvoiceView />} />
         <Route path="/reports"          element={<Reports />} />
         <Route path="/settings"         element={<Settings />} />
+        <Route path="/advance" element={<AdvancePayments/>}/>
       </Route>
 
       <Route element={<Protected roles={['super_admin']}><MainLayout /></Protected>}>

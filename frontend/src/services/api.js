@@ -62,4 +62,36 @@ export const invoiceAPI = {
   downloadUrl: (id) => `/api/invoice/${id}/download`,
 };
 
+// =============================================
+// ADD TO: services/api.js
+// Existing advanceAPI section add karo
+// =============================================
+
+// Existing api.js ke end mein yeh add karo:
+
+export const advanceAPI = {
+  // Create new advance
+  create:             (d)         => api.post('/advances', d),
+
+  // Get all advances (with filters)
+  getAll:             (p)         => api.get('/advances', { params: p }),
+
+  // Customer ka advance list + summary
+  getByCustomer:      (customerId)=> api.get(`/advances/customer/${customerId}`),
+
+  // Quick balance check (billing form mein)
+  getBalance:         (customerId)=> api.get(`/advances/balance/${customerId}`),
+
+  // Apply advance to existing sale
+  applyToSale:        (d)         => api.post('/advances/apply', d),
+
+  // Refund
+  refund:             (id, d)     => api.post(`/advances/${id}/refund`, d),
+
+  // Transaction history for one advance
+  getTransactions:    (id)        => api.get(`/advances/${id}/transactions`),
+
+  // Reports
+  getReports:         (p)         => api.get('/advances/reports', { params: p }),
+};
 export default api;

@@ -1,4 +1,3 @@
-
 import { DataTypes, Model } from 'sequelize';
 import sequelize from '../config/database.js';
 
@@ -27,8 +26,6 @@ Sale.init(
     invoiceNumber: {
       type:   DataTypes.STRING(20),
       unique: true,
-      // Format: INV-001-0042
-      //         INV-{shopId}-{sequence}
     },
 
     saleDate: {
@@ -38,46 +35,43 @@ Sale.init(
 
     // ── Gold Rate ─────────────────────────────
     goldRate: {
-      type:      DataTypes.DECIMAL(10, 2),
-      allowNull: false,
-      // Rate on the day of sale — yeh fix rehta hai
-      // Example: ₹7,200 per gram
+      type:         DataTypes.DECIMAL(10, 2),
+      allowNull:    false,
+      defaultValue: 0,
     },
-    
+
+    // ── Silver Rate ───────────────────────────
+    silverRate: {
+      type:         DataTypes.DECIMAL(10, 2),
+      allowNull:    true,
+      defaultValue: 0,
+    },
 
     // ── GST Toggle ────────────────────────────
     isGst: {
       type:         DataTypes.BOOLEAN,
       defaultValue: false,
-      // true  = GST invoice (GSTIN required)
-      // false = Non-GST simple invoice
     },
 
     // ── Amounts ───────────────────────────────
     subtotal: {
       type:      DataTypes.DECIMAL(12, 2),
       allowNull: false,
-      // Sab items ka total (GST se pehle)
     },
 
     cgstAmount: {
       type:         DataTypes.DECIMAL(10, 2),
       defaultValue: 0,
-      // CGST = 1.5% (GST ka aadha)
     },
 
     sgstAmount: {
       type:         DataTypes.DECIMAL(10, 2),
       defaultValue: 0,
-      // SGST = 1.5% (GST ka aadha)
-      // Total GST = CGST + SGST = 3%
     },
 
     exchangeValue: {
       type:         DataTypes.DECIMAL(10, 2),
       defaultValue: 0,
-      // Old gold exchange se kitna mila
-      // Yeh total se MINUS hota hai
     },
 
     discountAmount: {
@@ -88,7 +82,6 @@ Sale.init(
     totalAmount: {
       type:      DataTypes.DECIMAL(12, 2),
       allowNull: false,
-      // Final amount = subtotal + GST - exchange - discount
     },
 
     paidAmount: {
@@ -100,17 +93,20 @@ Sale.init(
       type:         DataTypes.DECIMAL(12, 2),
       defaultValue: 0,
     },
+
     paymentMode: {
-  type:         DataTypes.ENUM('cash', 'card', 'upi', 'cheque', 'bank_transfer'),
-  defaultValue: 'cash',
+      type:         DataTypes.ENUM('cash', 'card', 'upi', 'cheque', 'bank_transfer'),
+      defaultValue: 'cash',
+    },
 
-},
-
+    advanceUsed: {
+      type:         DataTypes.DECIMAL(12, 2),
+      defaultValue: 0,
+    },
 
     status: {
       type:         DataTypes.ENUM('paid', 'partial', 'due'),
       defaultValue: 'due',
-
     },
 
     notes: {

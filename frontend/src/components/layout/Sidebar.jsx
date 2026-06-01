@@ -3,7 +3,7 @@ import { useAuth } from '../../context/AuthContext';
 import {
   LayoutDashboard, FileText, Users, AlertCircle,
   CreditCard, Receipt, BarChart3, Building2,
-  Star, LogOut, ChevronLeft, ChevronRight, Gem,
+  Star, LogOut, ChevronLeft, ChevronRight, Gem, FunnelPlus
 } from 'lucide-react';
 import ExpiryNotification from '../ui/ExpiryNotification';
 // Sidebar — left side navigation
@@ -21,6 +21,7 @@ export default function Sidebar({ collapsed, onToggle }) {
     { to: '/payments',      icon: CreditCard,       label: 'Payments'        },
     { to: '/invoices',      icon: Receipt,          label: 'Invoices'        },
     { to: '/reports',       icon: BarChart3,        label: 'Reports'         },
+    { to:'/advance', icon: FunnelPlus,label:'Advance'}
     // { to: '/settings',      icon: BarChart3,        label: 'Settings'        },
 
   ];
