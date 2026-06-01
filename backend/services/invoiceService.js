@@ -129,7 +129,7 @@ const drawNonGSTInvoice = (doc, sale, shop) => {
 
 // ── HEADER ────────────────────────────────────────
 const drawHeader = (doc, shop, sale, invoiceType) => {
-  const H       = 100;
+  const H       = 110;
   const centerX = PAGE.margin + PAGE.inner / 2;
 
   // White header background
@@ -159,8 +159,8 @@ const drawHeader = (doc, shop, sale, invoiceType) => {
   doc.fontSize(22)
      .fillColor('#CC2200')
      .font('Helvetica-Bold')
-     .text(shop.name.toUpperCase(), PAGE.margin + 70, PAGE.margin + 8, {
-       width: PAGE.inner - 140,
+     .text(shop.name.toUpperCase(), PAGE.margin + 105, PAGE.margin + 12, {
+       width: PAGE.inner - 210,
        align: 'center',
        lineBreak: false,
      });
@@ -170,8 +170,8 @@ const drawHeader = (doc, shop, sale, invoiceType) => {
     doc.fontSize(9)
        .fillColor(C.navy)
        .font('Helvetica-Bold')
-       .text(shop.tagline, PAGE.margin + 70, PAGE.margin + 34, {
-         width: PAGE.inner - 140,
+       .text(shop.tagline, PAGE.margin + 105, PAGE.margin + 40, {
+         width: PAGE.inner - 210,
          align: 'center',
        });
   }
@@ -182,8 +182,8 @@ const drawHeader = (doc, shop, sale, invoiceType) => {
     doc.fontSize(8.5)
        .fillColor(C.navy)
        .font('Helvetica')
-       .text(`Address : ${addrLine}`, PAGE.margin + 70, PAGE.margin + 47, {
-         width: PAGE.inner - 140,
+       .text(`Address : ${addrLine}`, PAGE.margin + 105, PAGE.margin + 56, {
+         width: PAGE.inner - 210,
          align: 'center',
        });
   }
@@ -193,17 +193,17 @@ const drawHeader = (doc, shop, sale, invoiceType) => {
     doc.fontSize(8.5)
        .fillColor(C.navy)
        .font('Helvetica')
-       .text(`Mobile: ${shop.phone}`, PAGE.margin + 70, PAGE.margin + 59, {
-         width: PAGE.inner - 140,
+       .text(`Mobile: ${shop.phone}`, PAGE.margin + 105, PAGE.margin + 72, {
+         width: PAGE.inner - 210,
          align: 'center',
        });
   }
 
-  // ── Invoice type badge (top-right corner, inside header) ──
+  // ── Invoice type badge (bottom-right, inside header) ──
   doc.fontSize(8)
      .fillColor(C.navy)
      .font('Helvetica-Bold')
-     .text(invoiceType, PAGE.width - PAGE.margin - 130, PAGE.margin + 72, {
+     .text(invoiceType, PAGE.width - PAGE.margin - 130, PAGE.margin + 90, {
        width: 124,
        align: 'right',
      });
