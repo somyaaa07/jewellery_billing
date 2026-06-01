@@ -179,22 +179,22 @@ const drawHeader = (doc, shop, sale, invoiceType) => {
   // ── Address line ──
   const addrLine = [shop.address, shop.city].filter(Boolean).join(', ');
   if (addrLine) {
-    doc.fontSize(8.5)
+    doc.fontSize(7.5)
        .fillColor(C.navy)
        .font('Helvetica')
        .text(`Address : ${addrLine}`, PAGE.margin + 105, PAGE.margin + 56, {
-         width: PAGE.inner - 210,
+         width: PAGE.inner - 230,
          align: 'center',
        });
   }
 
   // ── Phone ──
   if (shop.phone) {
-    doc.fontSize(8.5)
+    doc.fontSize(7.5)
        .fillColor(C.navy)
        .font('Helvetica')
-       .text(`Mobile: ${shop.phone}`, PAGE.margin + 105, PAGE.margin + 72, {
-         width: PAGE.inner - 210,
+       .text(`Mobile: ${shop.phone}`, PAGE.margin + 105, PAGE.margin + 78, {
+         width: PAGE.inner - 230,
          align: 'center',
        });
   }
