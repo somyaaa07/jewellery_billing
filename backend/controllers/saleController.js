@@ -100,10 +100,20 @@ export const createSale = async (req, res) => {
     }
 
     // ── Invoice Number ──
-    const count = await Sale.count({ where: { shopId } });
-    const year  = new Date().getFullYear();
-    const seq   = String(count + 1).padStart(4, '0');
-    const invoiceNumber = `INV-${shopId}-${year}-${seq}`;
+ // ── Invoice Number ──
+const invoiceCount = await Sale.count({
+  where: {
+    shopId,
+    isGst: !!isGst
+  }
+});
+
+const year = new Date().getFullYear();
+const seq  = String(invoiceCount + 1).padStart(4, '0');
+
+const prefix = isGst ? 'GST' : 'EST';
+
+const invoiceNumber = `${prefix}-${shopId}-${year}-${seq}`;
 
     // ── Items Calculate ──
     let subtotal = 0;
