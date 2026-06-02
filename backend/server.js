@@ -56,7 +56,7 @@ app.use((err, req, res, next) => {
 
 const startServer = async () => {
   await testConnection();
-  await sequelize.sync({ alter: true });  // auto creates new tables
+  await sequelize.sync();  // auto creates new tables
   console.log('✅ Database synced!');
   app.listen(PORT, () => {
     console.log(`🚀 Server running → http://localhost:${PORT}`);

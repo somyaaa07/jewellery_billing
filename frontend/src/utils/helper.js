@@ -23,42 +23,46 @@ export const calcNetWeight = (gross, stone) =>
 export const calcBill = ({
   items = [],
   goldRate = 0,
+  silverRate = 0,
   isGst = false,
   exchangeItems = [],
   discount = 0,
   paid = 0
 }) => {
-
   let subtotal = 0;
 
   items.forEach(item => {
 
-    const net = calcNetWeight(
-      item.grossWeight,
-      item.stoneWeight
-    );
 
-    // Gold value
-    const goldValue =
-      net * parseFloat(goldRate || 0);
+   const net = calcNetWeight(
+  item.grossWeight,
+  item.stoneWeight
+);
 
-    // Making %
-    const makingPercent =
-      parseFloat(item.makingCharges || 0);
+const metalType = (item.metalType || 'gold').toLowerCase();
 
-    // Making ₹ value
-    const makingValue =
-      goldValue * (makingPercent / 100);
+const activeRate =
+  metalType === 'gold'
+    ? parseFloat(goldRate || 0)
+    : parseFloat(silverRate || 0);
 
-    // Stone charges
-    const stoneCharges =
-      parseFloat(item.stoneCharges || 0);
+const metalValue = net * activeRate;
 
-    // Final item total
-    const total =
-      goldValue +
-      makingValue +
-      stoneCharges;
+const makingPercent =
+  parseFloat(item.makingCharges || 0);
+
+const makingValue =
+  metalValue * (makingPercent / 100);
+
+const stoneCharges =
+  parseFloat(item.stoneCharges || 0);
+
+const total =
+  metalValue +
+  makingValue +
+  stoneCharges;
+
+ 
 
     subtotal += total;
   });

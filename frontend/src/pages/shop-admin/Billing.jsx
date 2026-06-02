@@ -46,21 +46,20 @@ export default function Billing() {
   const [addCustOpen, setAddCustOpen] = useState(false);
   const [newCust,     setNewCust]     = useState({ name:'', phone:'', email:'', address:'' });
 
-  const [advanceBalance,    setAdvanceBalance]    = useState(0);
-  const [advanceList,       setAdvanceList]       = useState([]);
-  const [useAdvanceAmount,  setUseAdvanceAmount]  = useState('');
-  const [loadingAdvance,    setLoadingAdvance]    = useState(false);
+  const [advanceBalance,   setAdvanceBalance]   = useState(0);
+  const [advanceList,      setAdvanceList]      = useState([]);
+  const [useAdvanceAmount, setUseAdvanceAmount] = useState('');
+  const [loadingAdvance,   setLoadingAdvance]   = useState(false);
 
-  const [advanceOpen,  setAdvanceOpen]  = useState(false);
-  const [advanceForm,  setAdvanceForm]  = useState({
+  const [advanceOpen, setAdvanceOpen] = useState(false);
+  const [advanceForm, setAdvanceForm] = useState({
     amount: '', paymentMethod: 'cash', transactionReference: '', notes: '',
     paymentDate: new Date().toISOString().split('T')[0],
   });
-  const [savingAdv,  setSavingAdv]  = useState(false);
-  const [advSaved,   setAdvSaved]   = useState(false);
-  const [advError,   setAdvError]   = useState('');
+  const [savingAdv, setSavingAdv] = useState(false);
+  const [advSaved,  setAdvSaved]  = useState(false);
+  const [advError,  setAdvError]  = useState('');
 
-  // Determine if any silver item exists
   const hasSilverItem = items.some(it => (it.metalType || 'gold') === 'silver');
   const hasGoldItem   = items.some(it => (it.metalType || 'gold') === 'gold');
 
@@ -70,6 +69,7 @@ export default function Billing() {
       .catch(console.error);
   }, []);
 
+  // ── Jab customer change ho tab advance balance fetch karo ──
   useEffect(() => {
     setAdvanceBalance(0);
     setAdvanceList([]);
@@ -82,7 +82,7 @@ export default function Billing() {
       .then(r => {
         const data = r.data.data;
         setAdvanceBalance(data.totalBalance || 0);
-        setAdvanceList(data.advances || []);
+        setAdvanceList(data.advances       || []);
       })
       .catch(() => {
         setAdvanceBalance(0);
@@ -95,7 +95,7 @@ export default function Billing() {
     setItems(p => p.map((it, idx) => idx === i ? { ...it, [f]: v } : it));
 
   const changeMetalType = (i, metalType) => {
-    const defaultPurity = metalType === 'gold' ? '22K' : '925';
+    const defaultPurity = metalType === 'gold' ? '22K' : '';
     const defaultHsn    = DEFAULT_HSN[metalType] || '';
     setItems(p => p.map((it, idx) =>
       idx === i
@@ -121,17 +121,20 @@ export default function Billing() {
     paid: paidAmount,
   });
 
+  // ── Advance calculation ──
+  // Cap karo: user ne jo amount likha vs available balance vs total bill
   const advanceToUse  = Math.min(
     parseFloat(useAdvanceAmount || 0),
     advanceBalance,
-    summary.total
+    Math.max(0, summary.total - parseFloat(paidAmount || 0))
   );
   const totalPaidDisp = parseFloat(paidAmount || 0) + advanceToUse;
   const finalDue      = Math.max(0, summary.total - totalPaidDisp);
 
+  // ── Save Bill ──
   const handleSave = async () => {
     if (!customerId) return setError('Customer select karo');
-    if (hasGoldItem && !goldRate)   return setError('Gold rate enter karo');
+    if (hasGoldItem   && !goldRate)   return setError('Gold rate enter karo');
     if (hasSilverItem && !silverRate) return setError('Silver rate enter karo');
 
     for (let i = 0; i < items.length; i++) {
@@ -148,40 +151,52 @@ export default function Billing() {
     }
 
     if (advanceToUse > advanceBalance)
-      return setError(`Advance balance sirf ₹${fmtINR(advanceBalance)} available hai`);
+      return setError(`Advance balance sirf ${fmtINR(advanceBalance)} available hai`);
 
     try {
-      setSaving(true); setError('');
+      setSaving(true);
+      setError('');
+
       const payload = {
-        customerId:       parseInt(customerId),
-        goldRate:         parseFloat(goldRate || 0),
-        silverRate:       parseFloat(silverRate || 0),
+        customerId:        parseInt(customerId),
+        goldRate:          parseFloat(goldRate   || 0),
+        silverRate:        parseFloat(silverRate || 0),
         isGst,
-        paidAmount:       parseFloat(paidAmount || 0),
-        paymentMode:      payMode,
+        paidAmount:        parseFloat(paidAmount || 0),
+        paymentMode:       payMode,
         notes,
-        useAdvanceAmount: advanceToUse,
+
+        // ✅ FIX: advanceUsedAmount = existing advance jo use ho raha hai billing pe
+        // Controller isse FIFO se existing AdvancePayment records se deduct karega
+        advanceUsedAmount: parseFloat(advanceToUse.toFixed(2)),
+
+        // advanceReceivedAmount bhejne ki zarurat nahi jab tak customer
+        // billing ke saath naya advance de — woh "Record Advance Payment"
+        // section se alag handle hota hai
+        advanceReceivedAmount: 0,
+
         items: items.map(it => {
           const metalType = (it.metalType || 'gold').toLowerCase();
           return {
             metalType,
             itemName:             it.itemName,
-            grossWeight:          parseFloat(it.grossWeight  || 0),
-            stoneWeight:          parseFloat(it.stoneWeight  || 0),
-            makingChargesPercent: metalType === 'gold' ? parseFloat(it.makingCharges || 0) : undefined,
-            stoneCharges:         parseFloat(it.stoneCharges || 0),
-            purity:               it.purity || null,
-            huid:                 it.huid   || null,
-            hsnCode:              it.hsnCode || DEFAULT_HSN[metalType] || null,
-            netWeight:            calcNetWeight(it.grossWeight, it.stoneWeight),
+            grossWeight:          parseFloat(it.grossWeight   || 0),
+            stoneWeight:          parseFloat(it.stoneWeight   || 0),
+            makingChargesPercent: parseFloat(it.makingCharges || 0),
+            stoneCharges:         parseFloat(it.stoneCharges  || 0),
+            purity:   metalType === 'gold' ? (it.purity || '22K') : null,
+            huid:     it.huid    || null,
+            hsnCode:  it.hsnCode || DEFAULT_HSN[metalType] || null,
+            netWeight: calcNetWeight(it.grossWeight, it.stoneWeight),
           };
         }),
+
         exchangeItems: exItems.map(ex => ({
           itemDescription: ex.itemDescription,
           grossWeight:     parseFloat(ex.grossWeight  || 0),
           purity:          ex.purity,
           exchangeRate:    parseFloat(ex.exchangeRate || 0),
-          exchangeValue:   parseFloat(ex.grossWeight || 0) * parseFloat(ex.exchangeRate || 0),
+          exchangeValue:   parseFloat(ex.grossWeight  || 0) * parseFloat(ex.exchangeRate || 0),
         })),
       };
 
@@ -189,29 +204,38 @@ export default function Billing() {
       navigate(`/invoice/${res.data.data.id}`);
     } catch (err) {
       setError(err.response?.data?.message || 'Bill save nahi hua');
-    } finally { setSaving(false); }
+    } finally {
+      setSaving(false);
+    }
   };
 
+  // ── Save Advance (alag — billing ke saath fresh advance record karna) ──
   const handleSaveAdvance = async () => {
     if (!customerId) return setAdvError('Pehle customer select karo');
     if (!advanceForm.amount || parseFloat(advanceForm.amount) <= 0)
       return setAdvError('Valid amount enter karo');
     try {
-      setSavingAdv(true); setAdvError('');
+      setSavingAdv(true);
+      setAdvError('');
       await advanceAPI.create({ ...advanceForm, customerId: parseInt(customerId) });
       setAdvSaved(true);
       setAdvanceForm({
         amount: '', paymentMethod: 'cash', transactionReference: '', notes: '',
         paymentDate: new Date().toISOString().split('T')[0],
       });
+
+      // Balance refresh karo
       const r    = await advanceAPI.getBalance(customerId);
       const data = r.data.data;
       setAdvanceBalance(data.totalBalance || 0);
-      setAdvanceList(data.advances || []);
+      setAdvanceList(data.advances       || []);
+
       setTimeout(() => setAdvSaved(false), 3000);
     } catch (err) {
       setAdvError(err.response?.data?.message || 'Advance save nahi hua');
-    } finally { setSavingAdv(false); }
+    } finally {
+      setSavingAdv(false);
+    }
   };
 
   const handleAddCustomer = async (e) => {
@@ -240,7 +264,7 @@ export default function Billing() {
         </div>
       )}
 
-      {/* ── Row 1: Customer + Gold Rate + Silver Rate + GST ── */}
+      {/* ── Row 1: Customer + Rates + GST ── */}
       <div className="card">
         <h3 className="font-slab font-semibold text-[#050a30] text-sm mb-4">Bill Details</h3>
         <div className="grid sm:grid-cols-4 gap-4">
@@ -307,10 +331,9 @@ export default function Billing() {
               value={silverRate} onChange={e => setSilverRate(e.target.value)}
             />
           </div>
-
         </div>
 
-        {/* GST toggle — full width row below */}
+        {/* GST Toggle */}
         <div className="mt-4">
           <label className="flex items-center gap-2.5 cursor-pointer w-fit">
             <div
@@ -339,14 +362,13 @@ export default function Billing() {
 
         <div className="space-y-4">
           {items.map((it, i) => {
-            const isGold      = (it.metalType || 'gold') === 'gold';
-            const purities    = isGold ? GOLD_PURITIES : SILVER_PURITIES;
-            const net         = calcNetWeight(it.grossWeight, it.stoneWeight);
-            const makingPct   = parseFloat(it.makingCharges || 0);
-            const activeRate  = isGold ? parseFloat(goldRate || 0) : parseFloat(silverRate || 0);
-            const metalValue  = net * activeRate;
-            const makingValue = isGold ? metalValue * (makingPct / 100) : 0;
-            const total       = metalValue + makingValue + parseFloat(it.stoneCharges || 0);
+            const isGold     = (it.metalType || 'gold') === 'gold';
+            const net        = calcNetWeight(it.grossWeight, it.stoneWeight);
+            const makingPct  = parseFloat(it.makingCharges || 0);
+            const activeRate = isGold ? parseFloat(goldRate || 0) : parseFloat(silverRate || 0);
+            const metalValue = net * activeRate;
+            const makingValue = metalValue * (makingPct / 100);
+            const total      = metalValue + makingValue + parseFloat(it.stoneCharges || 0);
 
             return (
               <div
@@ -364,9 +386,7 @@ export default function Billing() {
                           onClick={() => changeMetalType(i, mt)}
                           className={`px-3 py-1.5 capitalize transition-colors
                             ${it.metalType === mt
-                              ? mt === 'gold'
-                                ? 'bg-yellow-400 text-yellow-900'
-                                : 'bg-gray-400 text-white'
+                              ? mt === 'gold' ? 'bg-yellow-400 text-yellow-900' : 'bg-gray-400 text-white'
                               : 'bg-white text-gray-500 hover:bg-gray-50'
                             }`}
                         >
@@ -375,7 +395,6 @@ export default function Billing() {
                       ))}
                     </div>
                     <span className="text-xs text-gray-400">Item {i + 1}</span>
-                    {/* Rate indicator per item */}
                     <span className={`text-xs px-2 py-0.5 rounded-full font-medium
                       ${isGold ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-600'}`}>
                       ₹{activeRate > 0 ? activeRate.toLocaleString('en-IN') : '—'}/g
@@ -400,18 +419,18 @@ export default function Billing() {
                     />
                   </div>
 
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1">
-                      Purity{isGold ? ' *' : ''}
-                    </label>
-                    <select
-                      className="input-field text-xs py-1.5"
-                      value={it.purity}
-                      onChange={e => updateItem(i, 'purity', e.target.value)}
-                    >
-                      {purities.map(p => <option key={p}>{p}</option>)}
-                    </select>
-                  </div>
+                  {isGold && (
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1">Purity *</label>
+                      <select
+                        className="input-field text-xs py-1.5"
+                        value={it.purity}
+                        onChange={e => updateItem(i, 'purity', e.target.value)}
+                      >
+                        {GOLD_PURITIES.map(p => <option key={p}>{p}</option>)}
+                      </select>
+                    </div>
+                  )}
 
                   <div>
                     <label className="block text-xs font-medium text-gray-500 mb-1">HSN Code</label>
@@ -428,76 +447,56 @@ export default function Billing() {
                   <div>
                     <label className="block text-xs font-medium text-gray-500 mb-1">Gross Weight (g) *</label>
                     <input
-                      className="input-field text-xs py-1.5"
-                      type="number" placeholder="10.500"
+                      className="input-field text-xs py-1.5" type="number" placeholder="10.500"
                       value={it.grossWeight}
                       onChange={e => updateItem(i, 'grossWeight', e.target.value)}
                     />
                   </div>
-
                   <div>
                     <label className="block text-xs font-medium text-gray-500 mb-1">Stone Weight (g)</label>
                     <input
-                      className="input-field text-xs py-1.5"
-                      type="number" placeholder="0.000"
+                      className="input-field text-xs py-1.5" type="number" placeholder="0.000"
                       value={it.stoneWeight}
                       onChange={e => updateItem(i, 'stoneWeight', e.target.value)}
                     />
                   </div>
-
                   <div>
                     <label className="block text-xs font-medium text-gray-500 mb-1">Net Weight (g)</label>
                     <div className="input-field text-xs py-1.5 bg-gray-100 text-gray-600 select-none">
                       {fmtWt(net)}
                     </div>
                   </div>
-
                   {isGold ? (
                     <div>
                       <label className="block text-xs font-medium text-gray-500 mb-1">HUID</label>
                       <input
                         className="input-field text-xs py-1.5 font-mono tracking-wider uppercase"
-                        placeholder="AB1234"
-                        maxLength={6}
+                        placeholder="AB1234" maxLength={6}
                         value={it.huid}
                         onChange={e => updateItem(i, 'huid', e.target.value.toUpperCase())}
                       />
                     </div>
-                  ) : (
-                    <div />
-                  )}
+                  ) : <div />}
                 </div>
 
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 items-end">
-
-                  {isGold ? (
-                    <div>
-                      <label className="block text-xs font-medium text-gray-500 mb-1">Making (%)</label>
-                      <input
-                        className="input-field text-xs py-1.5"
-                        type="number" placeholder="5"
-                        value={it.makingCharges}
-                        onChange={e => updateItem(i, 'makingCharges', e.target.value)}
-                      />
-                    </div>
-                  ) : (
-                    <div>
-                      <label className="block text-xs font-medium text-gray-400 mb-1 italic">Making (N/A for silver)</label>
-                      <div className="input-field text-xs py-1.5 bg-gray-100 text-gray-400 select-none">—</div>
-                    </div>
-                  )}
-
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-1">Making (%)</label>
+                    <input
+                      className="input-field text-xs py-1.5" type="number" placeholder="5"
+                      value={it.makingCharges}
+                      onChange={e => updateItem(i, 'makingCharges', e.target.value)}
+                    />
+                  </div>
                   <div>
                     <label className="block text-xs font-medium text-gray-500 mb-1">Stone Charges (₹)</label>
                     <input
-                      className="input-field text-xs py-1.5"
-                      type="number" placeholder="0"
+                      className="input-field text-xs py-1.5" type="number" placeholder="0"
                       value={it.stoneCharges}
                       onChange={e => updateItem(i, 'stoneCharges', e.target.value)}
                     />
                   </div>
-
-                  {isGold && makingPct > 0 && (
+                  {makingPct > 0 && (
                     <div>
                       <label className="block text-xs font-medium text-gray-400 mb-1">Making Value</label>
                       <div className="input-field text-xs py-1.5 bg-gray-50 text-gray-600 select-none">
@@ -505,17 +504,14 @@ export default function Billing() {
                       </div>
                     </div>
                   )}
-
                   <div className={isGold && makingPct > 0 ? '' : 'sm:col-start-4'}>
                     <label className="block text-xs font-medium text-gray-500 mb-1">Item Total</label>
                     <div className={`input-field text-xs py-1.5 font-bold select-none
-                      ${isGold ? 'bg-yellow-50 text-yellow-800' : 'bg-gray-100 text-gray-700'}`}
-                    >
+                      ${isGold ? 'bg-yellow-50 text-yellow-800' : 'bg-gray-100 text-gray-700'}`}>
                       {fmtINR(total)}
                     </div>
                   </div>
                 </div>
-
               </div>
             );
           })}
@@ -570,10 +566,10 @@ export default function Billing() {
           <h3 className="font-slab font-semibold text-[#050a30] text-sm mb-4">Bill Summary</h3>
           <div className="space-y-2.5 text-sm">
             {[
-              { label:'Subtotal',           val: fmtINR(summary.subtotal) },
+              { label:'Subtotal', val: fmtINR(summary.subtotal) },
               ...(isGst ? [
-                { label:'CGST @ 1.5%',      val: fmtINR(summary.cgst) },
-                { label:'SGST @ 1.5%',      val: fmtINR(summary.sgst) },
+                { label:'CGST @ 1.5%', val: fmtINR(summary.cgst) },
+                { label:'SGST @ 1.5%', val: fmtINR(summary.sgst) },
               ] : []),
               ...(summary.exchangeValue > 0 ? [
                 { label:'Exchange Deduction', val:`- ${fmtINR(summary.exchangeValue)}`, cls:'text-green-600' },
@@ -646,14 +642,23 @@ export default function Billing() {
                   className="input-field text-sm"
                   type="number"
                   placeholder="0"
-                  max={Math.min(advanceBalance, summary.total)}
+                  max={Math.min(advanceBalance, Math.max(0, summary.total - parseFloat(paidAmount || 0)))}
                   value={useAdvanceAmount}
                   onChange={e => setUseAdvanceAmount(e.target.value)}
                 />
                 <div className="flex gap-2">
                   <button
                     type="button"
-                    onClick={() => setUseAdvanceAmount(String(Math.min(advanceBalance, Math.max(0, summary.total - parseFloat(paidAmount || 0))).toFixed(2)))}
+                    onClick={() =>
+                      setUseAdvanceAmount(
+                        String(
+                          Math.min(
+                            advanceBalance,
+                            Math.max(0, summary.total - parseFloat(paidAmount || 0))
+                          ).toFixed(2)
+                        )
+                      )
+                    }
                     className="text-xs bg-green-100 text-green-700 px-2.5 py-1 rounded-lg hover:bg-green-200 transition-colors"
                   >
                     Use Max
@@ -723,7 +728,7 @@ export default function Billing() {
         </div>
       </div>
 
-      {/* ── Row 5: Record Advance Payment ── */}
+      {/* ── Row 5: Record Advance Payment (fresh advance) ── */}
       <div className="card">
         <button
           type="button"
@@ -833,7 +838,6 @@ export default function Billing() {
                 </>
               )}
             </button>
-
           </div>
         )}
       </div>

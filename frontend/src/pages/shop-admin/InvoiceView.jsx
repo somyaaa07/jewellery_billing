@@ -3,7 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { useReactToPrint } from 'react-to-print';
 import { saleAPI } from '../../services/api';
 import { fmtINR, fmtDate, fmtWt } from '../../utils/helper';
-import { ArrowLeft, Printer, Download, MessageCircle, Mail } from 'lucide-react';
+import { ArrowLeft, Printer, Download, MessageCircle, Mail, Wallet } from 'lucide-react';
 import Spinner from '../../components/ui/Spinner';
 import Badge   from '../../components/ui/Badge';
 
@@ -101,10 +101,16 @@ export default function InvoiceView() {
     } catch (err) { console.error(err); alert('Email failed'); }
   };
 
-  const hasHuid      = (sale.items || []).some(it => it.huid);
-  const hasHsn       = (sale.items || []).some(it => it.hsnCode);
-  const hasGoldItem  = (sale.items || []).some(it => (it.metalType || 'gold') === 'gold');
-  const hasSilverItem = (sale.items || []).some(it => it.metalType === 'silver');
+  const hasHuid        = (sale.items || []).some(it => it.huid);
+  const hasHsn         = (sale.items || []).some(it => it.hsnCode);
+  const hasGoldItem    = (sale.items || []).some(it => (it.metalType || 'gold') === 'gold');
+  const hasSilverItem  = (sale.items || []).some(it => it.metalType === 'silver');
+
+  // ── Advance used in this sale ──
+  const advanceUsed = parseFloat(sale.advanceUsed || 0);
+
+  // Cash paid = paidAmount - advanceUsed
+  const cashPaid = parseFloat(sale.paidAmount || 0) - advanceUsed;
 
   return (
     <div className="max-w-3xl mx-auto space-y-4">
@@ -194,7 +200,7 @@ export default function InvoiceView() {
             {c.address && <p className="text-sm text-gray-500">{c.address}</p>}
           </div>
 
-          {/* Rate Summary strip — show both rates if applicable */}
+          {/* Rate Summary strip */}
           {(hasGoldItem || hasSilverItem) && (
             <div className="flex gap-4 bg-amber-50 rounded-xl px-4 py-2.5 border border-amber-100">
               {hasGoldItem && (
@@ -243,33 +249,24 @@ export default function InvoiceView() {
                     ? 'bg-yellow-100 text-yellow-800'
                     : 'bg-gray-100 text-gray-600';
 
-                  // Use item's stored rate; fallback to sale-level rate
                   const itemRate = it.rate
                     ? parseFloat(it.rate)
                     : isGold
-                      ? parseFloat(sale.goldRate || 0)
+                      ? parseFloat(sale.goldRate   || 0)
                       : parseFloat(sale.silverRate || 0);
 
                   return (
                     <tr key={i} className="border-b border-gray-50">
                       <td className="py-2.5 pr-3 font-medium text-[#050a30]">{it.itemName}</td>
-
                       <td className="py-2.5 pr-3">
                         <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${metalCls}`}>
                           {metalLabel}
                         </span>
                       </td>
-
-                      <td className="py-2.5 pr-3 text-gray-500">
-                        {it.purity || '—'}
-                      </td>
-
+                      <td className="py-2.5 pr-3 text-gray-500">{it.purity || '—'}</td>
                       {hasHsn && (
-                        <td className="py-2.5 pr-3 text-gray-400 font-mono text-xs">
-                          {it.hsnCode || '—'}
-                        </td>
+                        <td className="py-2.5 pr-3 text-gray-400 font-mono text-xs">{it.hsnCode || '—'}</td>
                       )}
-
                       {hasHuid && (
                         <td className="py-2.5 pr-3">
                           {it.huid ? (
@@ -281,23 +278,18 @@ export default function InvoiceView() {
                           )}
                         </td>
                       )}
-
-                      {/* Rate per item */}
                       <td className="py-2.5 pr-3 text-gray-500 text-xs">
                         ₹{itemRate.toLocaleString('en-IN')}/g
                       </td>
-
                       <td className="py-2.5 pr-3 text-gray-500">{fmtWt(it.grossWeight)}</td>
                       <td className="py-2.5 pr-3 text-gray-500">{fmtWt(it.stoneWeight)}</td>
                       <td className="py-2.5 pr-3 font-medium">{fmtWt(it.netWeight)}</td>
-
                       <td className="py-2.5 pr-3 text-gray-500">
                         {it.makingCharges
                           ? fmtINR(it.makingCharges)
                           : <span className="text-gray-300">—</span>
                         }
                       </td>
-
                       <td className="py-2.5 font-semibold text-[#050a30]">{fmtINR(it.itemTotal)}</td>
                     </tr>
                   );
@@ -323,7 +315,7 @@ export default function InvoiceView() {
 
           {/* Totals */}
           <div className="flex justify-end">
-            <div className="w-64 space-y-2 text-sm">
+            <div className="w-72 space-y-2 text-sm">
               <div className="flex justify-between">
                 <span className="text-gray-500">Subtotal</span>
                 <span>{fmtINR(sale.subtotal)}</span>
@@ -351,10 +343,50 @@ export default function InvoiceView() {
                 <span>Total</span>
                 <span>{fmtINR(sale.totalAmount)}</span>
               </div>
-              <div className="flex justify-between text-green-600 font-medium">
-                <span>Paid</span>
-                <span>{fmtINR(sale.paidAmount)}</span>
-              </div>
+
+              {/* ── Payment Breakdown ── */}
+              {cashPaid > 0 && (
+                <div className="flex justify-between text-green-600 font-medium">
+                  <span>Cash / UPI Paid</span>
+                  <span>{fmtINR(cashPaid)}</span>
+                </div>
+              )}
+
+              {/* ── Advance Used — highlighted box ── */}
+              {advanceUsed > 0 && (
+                <div className="flex justify-between items-center bg-green-50 border border-green-200 rounded-lg px-3 py-2 -mx-1">
+                  <span className="text-green-700 font-medium flex items-center gap-1.5">
+                    <Wallet size={12} className="flex-shrink-0" />
+                    Advance Used
+                  </span>
+                  <span className="font-semibold text-green-700">−{fmtINR(advanceUsed)}</span>
+                </div>
+              )}
+
+              {/* Total Paid row (only if both cash + advance) */}
+              {advanceUsed > 0 && cashPaid > 0 && (
+                <div className="flex justify-between font-semibold text-green-600 border-t border-gray-100 pt-1.5">
+                  <span>Total Paid</span>
+                  <span>{fmtINR(sale.paidAmount)}</span>
+                </div>
+              )}
+
+              {/* If only advance, single "Paid" row */}
+              {advanceUsed > 0 && cashPaid <= 0 && (
+                <div className="flex justify-between font-semibold text-green-600">
+                  <span>Paid (via Advance)</span>
+                  <span>{fmtINR(sale.paidAmount)}</span>
+                </div>
+              )}
+
+              {/* If only cash, single "Paid" row */}
+              {advanceUsed <= 0 && (
+                <div className="flex justify-between text-green-600 font-medium">
+                  <span>Paid</span>
+                  <span>{fmtINR(sale.paidAmount)}</span>
+                </div>
+              )}
+
               <div className="flex justify-between text-red-500 font-semibold">
                 <span>Due</span>
                 <span>{fmtINR(sale.dueAmount)}</span>

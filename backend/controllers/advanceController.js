@@ -514,10 +514,7 @@ export const getAdvanceReports = async (req, res) => {
   }
 };
 
-// ─────────────────────────────────────────────
-// GET TRANSACTION HISTORY for one advance
-// GET /api/advances/:id/transactions
-// ─────────────────────────────────────────────
+
 export const getAdvanceTransactions = async (req, res) => {
   try {
     const { id } = req.params;

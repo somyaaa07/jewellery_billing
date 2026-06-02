@@ -49,12 +49,17 @@ export const createSale = async (req, res) => {
       paidAmount,
       paymentMode,
       notes,
-      advanceReceivedAmount,
     } = req.body;
+
+    // advanceUsedAmount  = existing advance balance jo billing pe use ho raha hai (Billing.jsx se aata hai)
+    // advanceReceivedAmount = fresh advance jo customer abhi de raha hai (sale ke saath)
+    const advanceUsed     = parseFloat(req.body.advanceUsedAmount     || 0);
+    const advanceReceived = parseFloat(req.body.advanceReceivedAmount || 0);
 
     console.log('req.user:', req.user);
     console.log('paidAmount received:', paidAmount);
-    console.log('advanceReceivedAmount received:', advanceReceivedAmount);
+    console.log('advanceUsed received:', advanceUsed);
+    console.log('advanceReceived received:', advanceReceived);
 
     const shopId = req.user?.shopId;
     if (!shopId) {
@@ -72,7 +77,6 @@ export const createSale = async (req, res) => {
       return res.status(400).json({ success: false, message: 'customerId required hai' });
     }
 
-    // Check if gold items exist — goldRate required only if gold items present
     const hasGoldItems   = items.some(it => (it.metalType || 'gold').toLowerCase() === 'gold');
     const hasSilverItems = items.some(it => (it.metalType || 'gold').toLowerCase() === 'silver');
 
@@ -104,24 +108,28 @@ export const createSale = async (req, res) => {
     // ── Items Calculate ──
     let subtotal = 0;
     const processedItems = items.map(item => {
-      const metalType    = (item.metalType || 'gold').toLowerCase();
-      const netWeight    = Math.max(0, parseFloat(item.grossWeight || 0) - parseFloat(item.stoneWeight || 0));
-
-      // Use correct rate per metal type
-      const activeRate   = metalType === 'gold'
-        ? parseFloat(goldRate || 0)
+      const metalType  = (item.metalType || 'gold').toLowerCase();
+      const netWeight  = Math.max(0, parseFloat(item.grossWeight || 0) - parseFloat(item.stoneWeight || 0));
+      const activeRate = metalType === 'gold'
+        ? parseFloat(goldRate   || 0)
         : parseFloat(silverRate || 0);
 
       const metalValue   = netWeight * activeRate;
       const stoneCharges = parseFloat(item.stoneCharges || 0);
 
-      // Making charges: Gold only
       let making = 0;
-      if (metalType === 'gold') {
-        const makingPercent = parseFloat(item.makingChargesPercent || 0);
-        making = makingPercent > 0
-          ? parseFloat(((makingPercent / 100) * metalValue).toFixed(2))
-          : parseFloat(item.makingCharges || 0);
+      if (
+        item.makingChargesPercent !== undefined &&
+        item.makingChargesPercent !== null &&
+        item.makingChargesPercent !== ''
+      ) {
+        making = (metalValue * parseFloat(item.makingChargesPercent || 0)) / 100;
+      } else if (
+        item.makingCharges !== undefined &&
+        item.makingCharges !== null &&
+        item.makingCharges !== ''
+      ) {
+        making = parseFloat(item.makingCharges || 0);
       }
 
       const itemTotal = metalValue + making + stoneCharges;
@@ -129,21 +137,19 @@ export const createSale = async (req, res) => {
 
       return {
         metalType,
-        itemName:    item.itemName || 'Item',
-        huid:        item.huid    || null,
-        hsnCode:     item.hsnCode || null,
-        purity:      metalType === 'gold' ? (item.purity || '22K') : (item.purity || null),
-        rate:        activeRate,                           // correct rate per metal
-        grossWeight: parseFloat(item.grossWeight || 0),
-        stoneWeight: parseFloat(item.stoneWeight || 0),
-        netWeight:   parseFloat(netWeight.toFixed(3)),
-        makingChargesPercent: metalType === 'gold'
-          ? parseFloat(item.makingChargesPercent || 0)
-          : null,
-        makingCharges: metalType === 'gold' ? making : null,
+        itemName:             item.itemName || 'Item',
+        huid:                 item.huid    || null,
+        hsnCode:              item.hsnCode || null,
+        purity:               metalType === 'gold' ? (item.purity || '22K') : (item.purity || null),
+        rate:                 activeRate,
+        grossWeight:          parseFloat(item.grossWeight || 0),
+        stoneWeight:          parseFloat(item.stoneWeight || 0),
+        netWeight:            parseFloat(netWeight.toFixed(3)),
+        makingChargesPercent: parseFloat(item.makingChargesPercent || 0),
+        makingCharges:        parseFloat(making.toFixed(2)),
         stoneCharges,
-        itemTotal:   parseFloat(itemTotal.toFixed(2)),
-        quantity:    item.quantity || 1,
+        itemTotal:            parseFloat(itemTotal.toFixed(2)),
+        quantity:             item.quantity || 1,
       };
     });
 
@@ -170,22 +176,19 @@ export const createSale = async (req, res) => {
       (subtotal + cgstAmount + sgstAmount - totalExchangeValue).toFixed(2)
     );
 
-    // ── Advance ──
-    const advanceReceived = parseFloat(advanceReceivedAmount || 0);
+    // ── Payment calculation ──
+    // advanceUsed is already capped on frontend (Math.min(advanceBalance, total))
+    // but we double-cap here for safety
     const cashPaid        = parseFloat(paidAmount || 0);
-
-    const remainingAfterCash   = parseFloat(Math.max(0, totalAmount - cashPaid).toFixed(2));
-    const advanceAppliedToBill = parseFloat(Math.min(advanceReceived, remainingAfterCash).toFixed(2));
-    const advanceForFuture     = parseFloat(Math.max(0, advanceReceived - advanceAppliedToBill).toFixed(2));
-
-    const totalPaid = parseFloat((cashPaid + advanceAppliedToBill).toFixed(2));
-    const due       = parseFloat(Math.max(0, totalAmount - totalPaid).toFixed(2));
-    const status    = due <= 0 ? 'paid' : totalPaid > 0 ? 'partial' : 'due';
+    const advanceApplied  = parseFloat(Math.min(advanceUsed, Math.max(0, totalAmount - cashPaid)).toFixed(2));
+    const totalPaid       = parseFloat((cashPaid + advanceApplied).toFixed(2));
+    const due             = parseFloat(Math.max(0, totalAmount - totalPaid).toFixed(2));
+    const status          = due <= 0 ? 'paid' : totalPaid > 0 ? 'partial' : 'due';
 
     console.log('totalAmount:', totalAmount);
-    console.log('advanceReceived:', advanceReceived);
-    console.log('advanceAppliedToBill:', advanceAppliedToBill);
-    console.log('advanceForFuture:', advanceForFuture);
+    console.log('cashPaid:', cashPaid);
+    console.log('advanceApplied:', advanceApplied);
+    console.log('totalPaid:', totalPaid);
     console.log('due:', due);
 
     // ── Create Sale ──
@@ -206,7 +209,7 @@ export const createSale = async (req, res) => {
         totalAmount,
         paidAmount:     totalPaid,
         dueAmount:      due,
-        advanceUsed:    advanceAppliedToBill,
+        advanceUsed:    advanceApplied,
         status,
         notes,
         paymentMode:    paymentMode || 'cash',
@@ -239,23 +242,86 @@ export const createSale = async (req, res) => {
       );
     }
 
-    // ── Advance received ──
+    // ────────────────────────────────────────────────────────────
+    // ── DEDUCT EXISTING ADVANCE BALANCE (FIFO) ──
+    // Jab billing pe customer ka existing advance use hota hai
+    // tab unke AdvancePayment records se remainingBalance deduct karo
+    // ────────────────────────────────────────────────────────────
+    if (advanceApplied > 0) {
+      const activeAdvances = await AdvancePayment.findAll({
+        where: {
+          customerId,
+          shopId,
+          status:           { [Op.in]: ['active', 'partially_refunded'] },
+          remainingBalance: { [Op.gt]: 0 },
+        },
+        order: [['paymentDate', 'ASC'], ['createdAt', 'ASC']], // FIFO — purana pehle
+        lock:  t.LOCK.UPDATE,
+        transaction: t,
+      });
+
+      let remaining = advanceApplied;
+      for (const advance of activeAdvances) {
+        if (remaining <= 0) break;
+
+        const available  = parseFloat(advance.remainingBalance);
+        const toUse      = parseFloat(Math.min(available, remaining).toFixed(2));
+        const newBalance = parseFloat((available - toUse).toFixed(2));
+        const newStatus  = newBalance <= 0 ? 'fully_used' : advance.status;
+
+        // Transaction audit entry
+        await AdvanceTransaction.create(
+          {
+            shopId,
+            customerId,
+            advancePaymentId: advance.id,
+            saleId:           sale.id,
+            type:             'utilized',
+            amount:           -toUse,       // negative = debit
+            balanceBefore:    available,
+            balanceAfter:     newBalance,
+            notes:            `Used in invoice #${invoiceNumber}`,
+            transactionDate:  new Date(),
+          },
+          { transaction: t }
+        );
+
+        // AdvancePayment record update
+        await advance.update(
+          { remainingBalance: newBalance, status: newStatus },
+          { transaction: t }
+        );
+
+        remaining -= toUse;
+      }
+    }
+
+    // ────────────────────────────────────────────────────────────
+    // ── FRESH ADVANCE RECEIVED with this sale ──
+    // Agar customer ne sale ke saath naya advance diya ho
+    // ────────────────────────────────────────────────────────────
     if (advanceReceived > 0) {
+      // Fresh advance mein se agar kuch bill pe apply hua to baaki future ke liye
+      const remainingAfterCash      = parseFloat(Math.max(0, totalAmount - cashPaid).toFixed(2));
+      const freshAdvanceApplied     = parseFloat(Math.min(advanceReceived, remainingAfterCash).toFixed(2));
+      const freshAdvanceForFuture   = parseFloat(Math.max(0, advanceReceived - freshAdvanceApplied).toFixed(2));
+
       const advanceRecord = await AdvancePayment.create(
         {
           shopId,
           customerId,
           createdBy:        req.user.id,
           amount:           advanceReceived,
-          remainingBalance: advanceForFuture,
+          remainingBalance: freshAdvanceForFuture,
           paymentMethod:    paymentMode || 'cash',
           paymentDate:      new Date(),
-          status:           advanceForFuture <= 0 ? 'fully_used' : 'active',
+          status:           freshAdvanceForFuture <= 0 ? 'fully_used' : 'active',
           notes:            `Received with invoice #${invoiceNumber}`,
         },
         { transaction: t }
       );
 
+      // Transaction: received
       await AdvanceTransaction.create(
         {
           shopId,
@@ -272,7 +338,8 @@ export const createSale = async (req, res) => {
         { transaction: t }
       );
 
-      if (advanceAppliedToBill > 0) {
+      // Transaction: utilized (if any applied to this bill)
+      if (freshAdvanceApplied > 0) {
         await AdvanceTransaction.create(
           {
             shopId,
@@ -280,9 +347,9 @@ export const createSale = async (req, res) => {
             advancePaymentId: advanceRecord.id,
             saleId:           sale.id,
             type:             'utilized',
-            amount:           -advanceAppliedToBill,
+            amount:           -freshAdvanceApplied,
             balanceBefore:    advanceReceived,
-            balanceAfter:     advanceForFuture,
+            balanceAfter:     freshAdvanceForFuture,
             notes:            `Applied to invoice #${invoiceNumber}`,
             transactionDate:  new Date(),
           },
@@ -296,6 +363,15 @@ export const createSale = async (req, res) => {
       await Customer.increment(
         'totalDue',
         { by: due, where: { id: customerId }, transaction: t }
+      );
+    }
+
+    // ── Decrement Customer totalDue if advance was used ──
+    // (advance use hone se customer ka due kam hota hai)
+    if (advanceApplied > 0) {
+      await Customer.decrement(
+        'totalDue',
+        { by: advanceApplied, where: { id: customerId }, transaction: t }
       );
     }
 
@@ -313,11 +389,13 @@ export const createSale = async (req, res) => {
 
     res.status(201).json({
       success: true,
-      data: fullSale,
-      advanceSummary: advanceReceived > 0 ? {
-        received:        advanceReceived,
-        appliedToBill:   advanceAppliedToBill,
-        savedForFuture:  advanceForFuture,
+      data:    fullSale,
+      advanceSummary: advanceApplied > 0 ? {
+        existingAdvanceUsed: advanceApplied,
+      } : advanceReceived > 0 ? {
+        received:       advanceReceived,
+        appliedToBill:  parseFloat(Math.min(advanceReceived, Math.max(0, totalAmount - cashPaid)).toFixed(2)),
+        savedForFuture: parseFloat(Math.max(0, advanceReceived - Math.min(advanceReceived, Math.max(0, totalAmount - cashPaid))).toFixed(2)),
       } : null,
     });
 
