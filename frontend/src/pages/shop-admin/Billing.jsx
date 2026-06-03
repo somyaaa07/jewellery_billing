@@ -522,7 +522,7 @@ export default function Billing() {
       <div className="card">
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-slab font-semibold text-[#050a30] text-sm">
-            Exchange Gold <span className="text-xs text-gray-400 font-normal ml-1">(Optional)</span>
+            Exchange Items <span className="text-xs text-gray-400 font-normal ml-1">(Optional)</span>
           </h3>
           <button onClick={addEx} className="font-slab btn-secondary text-xs px-3 py-1.5">
             <Plus size={14} /> Add Exchange
