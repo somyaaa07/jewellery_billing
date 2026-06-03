@@ -390,7 +390,7 @@ export default function Billing() {
                               : 'bg-white text-gray-500 hover:bg-gray-50'
                             }`}
                         >
-                          {mt === 'gold' ? '🥇 Gold' : '🥈 Silver'}
+                          {mt === 'gold' ? ' Gold' : ' Silver'}
                         </button>
                       ))}
                     </div>
@@ -421,7 +421,7 @@ export default function Billing() {
 
                   {isGold && (
                     <div>
-                      <label className="block text-xs font-medium text-gray-500 mb-1">Purity *</label>
+                      <label className="block text-xs font-medium text-gray-500 mb-1">Karat (K) </label>
                       <select
                         className="input-field text-xs py-1.5"
                         value={it.purity}

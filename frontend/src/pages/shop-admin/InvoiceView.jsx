@@ -205,7 +205,7 @@ export default function InvoiceView() {
             <div className="flex gap-4 bg-amber-50 rounded-xl px-4 py-2.5 border border-amber-100">
               {hasGoldItem && (
                 <div className="flex items-center gap-1.5">
-                  <span className="text-xs text-amber-600 font-medium">🥇 Gold Rate:</span>
+                  <span className="text-xs text-amber-600 font-medium">Gold Rate:</span>
                   <span className="text-xs font-bold text-amber-800">
                     ₹{parseFloat(sale.goldRate || 0).toLocaleString('en-IN')}/g
                   </span>
@@ -244,7 +244,7 @@ export default function InvoiceView() {
               <tbody>
                 {(sale.items || []).map((it, i) => {
                   const isGold     = (it.metalType || 'gold') === 'gold';
-                  const metalLabel = isGold ? '🥇 Gold' : '🥈 Silver';
+                  const metalLabel = isGold ? ' Gold' : ' Silver';
                   const metalCls   = isGold
                     ? 'bg-yellow-100 text-yellow-800'
                     : 'bg-gray-100 text-gray-600';
