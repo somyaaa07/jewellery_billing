@@ -213,7 +213,7 @@ export default function InvoiceView() {
               )}
               {hasSilverItem && sale.silverRate && parseFloat(sale.silverRate) > 0 && (
                 <div className="flex items-center gap-1.5">
-                  <span className="text-xs text-gray-500 font-medium">🥈 Silver Rate:</span>
+                  <span className="text-xs text-gray-500 font-medium"> Silver Rate:</span>
                   <span className="text-xs font-bold text-gray-700">
                     ₹{parseFloat(sale.silverRate).toLocaleString('en-IN')}/g
                   </span>
