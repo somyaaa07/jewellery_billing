@@ -178,41 +178,39 @@ const drawHeader = (doc, shop, sale, title) => {
   const centerContentW  = pageWidth - (PAGE.margin + logoSize + 10) * 2;
 
   doc.font('PlayfairDisplayBold')
-     .fontSize(22)
+     .fontSize(23)
      .fillColor('#D81E05')
      .text(shop.name.toUpperCase(), centerContentX, startY + 6, {
        width: centerContentW,
        align: 'center',
      });
-
-  // ── ADDRESS (wrapped, never overlaps logos) ──
-  // ── ADDRESS (wrapped, never overlaps logos) ──
-  doc.font('Helvetica-Bold')        // ✅ bold
+// ── ADDRESS ──
+  doc.font('Helvetica-Bold')
      .fontSize(9)
      .fillColor('#1D4ED8')
      .text(
        `Address: ${shop.address || ''}`,
        centerContentX,
-       startY + 32,                 // ✅ thoda upar
+       startY + 46,                 // ✅ thoda neeche push — logo se gap
        {
          width:       centerContentW,
          align:       'center',
          lineBreak:   true,
-         lineGap:     4,            // ✅ upar neeche padding between lines
-         wordSpacing: 2,            // ✅ words ke beech spacing
+         lineGap:     1,            // ✅ line spacing kam
+         wordSpacing: 2,
        }
      );
 
-  // ── MOBILE — measure how tall address was, then position below ──
   const addressHeight = doc.heightOfString(
     `Address: ${shop.address || ''}`,
-    { width: centerContentW, fontSize: 7}
+    { width: centerContentW, fontSize: 9, lineGap: 1 }  // ✅ match karo lineGap
   );
 
-const mobileY = startY + 32 + addressHeight + 8; // ✅ +8 for bottom padding
+  const mobileY = startY + 36 + addressHeight + 20;  // ✅ address ke baad 6px gap
+
   doc.font('Helvetica-Bold')
      .fontSize(9)
-     .fillColor('#1D4ED8')
+     .fillColor('#111133')
      .text(
        `Mobile: ${shop.mobile || shop.phone || shop.contact || ''}`,
        centerContentX,
@@ -220,8 +218,8 @@ const mobileY = startY + 32 + addressHeight + 8; // ✅ +8 for bottom padding
        { width: centerContentW, align: 'center' }
      );
 
-  // ── TITLE (Estimate Price / TAX INVOICE) ──
-  const titleY = mobileY + 18;
+  // ── TITLE ──
+  const titleY = mobileY + 16;   // ✅ mobile ke baad same 18px gap (address top gap ke barabar)
 
   doc.font('Helvetica-Bold')
      .fontSize(14)
