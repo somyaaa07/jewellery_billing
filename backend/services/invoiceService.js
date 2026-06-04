@@ -27,13 +27,13 @@ const C = {
   white:       '#FFFFFF',
 };
 
-const FOOTER_SPACE = 45;
+const FOOTER_SPACE = 60;
 
 const PAGE = {
   width:   595,
-  height:  700,
+  height:  841,
   margin:  40,
-  inner:   530,
+  inner:   515,
 };
 
 // ── COLUMN X POSITIONS ───────────────────────────
