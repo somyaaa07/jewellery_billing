@@ -186,7 +186,7 @@ const drawHeader = (doc, shop, sale, title) => {
      });
 // ── ADDRESS ──
   doc.font('Helvetica-Bold')
-     .fontSize(9)
+     .fontSize(10)
      .fillColor('#1D4ED8')
      .text(
        `Address: ${shop.address || ''}`,
@@ -206,7 +206,7 @@ const drawHeader = (doc, shop, sale, title) => {
     { width: centerContentW, fontSize: 9, lineGap: 1 }  // ✅ match karo lineGap
   );
 
-  const mobileY = startY + 36 + addressHeight + 20;  // ✅ address ke baad 6px gap
+  const mobileY = startY + 36 + addressHeight + 15;  // ✅ address ke baad 6px gap
 
   doc.font('Helvetica-Bold')
      .fontSize(9)
