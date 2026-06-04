@@ -186,18 +186,20 @@ const drawHeader = (doc, shop, sale, title) => {
      });
 
   // ── ADDRESS (wrapped, never overlaps logos) ──
-  doc.font('Helvetica')
+  // ── ADDRESS (wrapped, never overlaps logos) ──
+  doc.font('Helvetica-Bold')        // ✅ bold
      .fontSize(9)
      .fillColor('#1D4ED8')
      .text(
        `Address: ${shop.address || ''}`,
        centerContentX,
-       startY + 36,
+       startY + 32,                 // ✅ thoda upar
        {
-         width:     centerContentW,
-         align:     'center',
-         lineBreak: true,        // ✅ wraps instead of overflowing
-         lineGap:   1,
+         width:       centerContentW,
+         align:       'center',
+         lineBreak:   true,
+         lineGap:     4,            // ✅ upar neeche padding between lines
+         wordSpacing: 2,            // ✅ words ke beech spacing
        }
      );
 
@@ -207,8 +209,7 @@ const drawHeader = (doc, shop, sale, title) => {
     { width: centerContentW, fontSize: 7}
   );
 
-  const mobileY = startY + 36 + addressHeight + 4;
-
+const mobileY = startY + 32 + addressHeight + 8; // ✅ +8 for bottom padding
   doc.font('Helvetica-Bold')
      .fontSize(9)
      .fillColor('#1D4ED8')
