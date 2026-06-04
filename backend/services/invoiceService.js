@@ -155,65 +155,91 @@ const drawNonGSTInvoice = (doc, sale, shop) => {
 
 // ── HEADER ────────────────────────────────────────
 const drawHeader = (doc, shop, sale, title) => {
-  const startY = 20;
+  const startY    = 20;
   const pageWidth = doc.page.width;
+  const logoSize  = 90; // ✅ increased from 70
 
-  const logoSize = 70;
-
-  if (LOGO_PATH) {
+  // ── LEFT LOGO ──
+  try {
     doc.image(LOGO_PATH, PAGE.margin, startY, {
       fit: [logoSize, logoSize],
     });
-  }
+  } catch (e) {}
 
-  if (BIS_LOGO_PATH) {
+  // ── RIGHT BIS LOGO ──
+  try {
     doc.image(BIS_LOGO_PATH, pageWidth - PAGE.margin - logoSize, startY, {
       fit: [logoSize, logoSize],
     });
-  }
+  } catch (e) {}
+
+  // ── SHOP NAME ──
+  const centerContentX  = PAGE.margin + logoSize + 10;
+  const centerContentW  = pageWidth - (PAGE.margin + logoSize + 10) * 2;
 
   doc.font('PlayfairDisplayBold')
-     .fontSize(24)
+     .fontSize(22)
      .fillColor('#D81E05')
-     .text(shop.name.toUpperCase(), 0, startY + 5, {
-        width: pageWidth,
-        align: 'center'
+     .text(shop.name.toUpperCase(), centerContentX, startY + 6, {
+       width: centerContentW,
+       align: 'center',
      });
 
-  let y = startY + 5;
-  y += 40;
-
+  // ── ADDRESS (wrapped, never overlaps logos) ──
   doc.font('Helvetica')
-     .fontSize(13)
+     .fontSize(9)
      .fillColor('#1D4ED8')
-     .text(`Address: ${shop.address || ''}`, 0, y, {
-        width: pageWidth,
-        align: 'center'
-     });
+     .text(
+       `Address: ${shop.address || ''}`,
+       centerContentX,
+       startY + 36,
+       {
+         width:     centerContentW,
+         align:     'center',
+         lineBreak: true,        // ✅ wraps instead of overflowing
+         lineGap:   1,
+       }
+     );
 
-  y += 15;
+  // ── MOBILE — measure how tall address was, then position below ──
+  const addressHeight = doc.heightOfString(
+    `Address: ${shop.address || ''}`,
+    { width: centerContentW, fontSize: 7}
+  );
 
-  doc.fontSize(10).text(`Mobile: ${shop.mobile || ''}`, 0, y, {
-     width: pageWidth,
-     align: 'center'
-  });
+  const mobileY = startY + 36 + addressHeight + 4;
+
+  doc.font('Helvetica-Bold')
+     .fontSize(9)
+     .fillColor('#1D4ED8')
+     .text(
+       `Mobile: ${shop.mobile || shop.phone || shop.contact || ''}`,
+       centerContentX,
+       mobileY,
+       { width: centerContentW, align: 'center' }
+     );
+
+  // ── TITLE (Estimate Price / TAX INVOICE) ──
+  const titleY = mobileY + 18;
 
   doc.font('Helvetica-Bold')
      .fontSize(14)
      .fillColor('#000');
 
   const textWidth = doc.widthOfString(title);
-  const centerX = (pageWidth - textWidth) / 2;
-  const titleY = startY + 75;
+  const centerX   = (pageWidth - textWidth) / 2;
   doc.text(title, centerX, titleY);
 
-  doc.moveTo(PAGE.margin, startY + 95)
-     .lineTo(pageWidth - PAGE.margin, startY + 95)
+  // ── DIVIDER ──
+  const dividerY = titleY + 22;
+
+  doc.moveTo(PAGE.margin, dividerY)
+     .lineTo(pageWidth - PAGE.margin, dividerY)
      .strokeColor('#1E3A8A')
      .lineWidth(1)
      .stroke();
 
-  return startY + 110;
+  return dividerY + 14; // ✅ dynamic — adjusts if address wraps to 2 lines
 };
 
 
