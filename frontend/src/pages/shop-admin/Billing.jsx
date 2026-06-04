@@ -122,7 +122,6 @@ export default function Billing() {
   });
 
   // ── Advance calculation ──
-  // Cap karo: user ne jo amount likha vs available balance vs total bill
   const advanceToUse  = Math.min(
     parseFloat(useAdvanceAmount || 0),
     advanceBalance,
@@ -134,8 +133,8 @@ export default function Billing() {
   // ── Save Bill ──
   const handleSave = async () => {
     if (!customerId) return setError('Customer select karo');
-    if (hasGoldItem   && !goldRate)   return setError('Gold rate enter karo');
-    if (hasSilverItem && !silverRate) return setError('Silver rate enter karo');
+    if (hasGoldItem   && !goldRate)   return setError('Enter Gold Rate');
+    if (hasSilverItem && !silverRate) return setError('Enter Silver Rate');
 
     for (let i = 0; i < items.length; i++) {
       const it        = items[i];
@@ -148,6 +147,9 @@ export default function Billing() {
         return setError(`Item ${idx}: Gross weight required hai`);
       if (metalType === 'gold' && !it.purity)
         return setError(`Item ${idx}: Gold ke liye purity required hai`);
+      // ✅ Silver: making charge (flat) required
+      if (metalType === 'silver' && (it.makingCharges === '' || it.makingCharges === undefined))
+        return setError(`Item ${idx}: Silver ke liye making charges required hai`);
     }
 
     if (advanceToUse > advanceBalance)
@@ -165,29 +167,26 @@ export default function Billing() {
         paidAmount:        parseFloat(paidAmount || 0),
         paymentMode:       payMode,
         notes,
-
-        // ✅ FIX: advanceUsedAmount = existing advance jo use ho raha hai billing pe
-        // Controller isse FIFO se existing AdvancePayment records se deduct karega
-        advanceUsedAmount: parseFloat(advanceToUse.toFixed(2)),
-
-        // advanceReceivedAmount bhejne ki zarurat nahi jab tak customer
-        // billing ke saath naya advance de — woh "Record Advance Payment"
-        // section se alag handle hota hai
+        advanceUsedAmount:    parseFloat(advanceToUse.toFixed(2)),
         advanceReceivedAmount: 0,
 
+        // ✅ FIX: Gold → makingChargesPercent, Silver → makingCharges (flat ₹)
         items: items.map(it => {
           const metalType = (it.metalType || 'gold').toLowerCase();
           return {
             metalType,
-            itemName:             it.itemName,
-            grossWeight:          parseFloat(it.grossWeight   || 0),
-            stoneWeight:          parseFloat(it.stoneWeight   || 0),
-            makingChargesPercent: parseFloat(it.makingCharges || 0),
-            stoneCharges:         parseFloat(it.stoneCharges  || 0),
+            itemName:     it.itemName,
+            grossWeight:  parseFloat(it.grossWeight  || 0),
+            stoneWeight:  parseFloat(it.stoneWeight  || 0),
+            stoneCharges: parseFloat(it.stoneCharges || 0),
             purity:   metalType === 'gold' ? (it.purity || '22K') : null,
             huid:     it.huid    || null,
             hsnCode:  it.hsnCode || DEFAULT_HSN[metalType] || null,
             netWeight: calcNetWeight(it.grossWeight, it.stoneWeight),
+            ...(metalType === 'silver'
+              ? { makingCharges: parseFloat(it.makingCharges || 0) }          // flat ₹
+              : { makingChargesPercent: parseFloat(it.makingCharges || 0) }   // percent
+            ),
           };
         }),
 
@@ -209,7 +208,7 @@ export default function Billing() {
     }
   };
 
-  // ── Save Advance (alag — billing ke saath fresh advance record karna) ──
+  // ── Save Advance ──
   const handleSaveAdvance = async () => {
     if (!customerId) return setAdvError('Pehle customer select karo');
     if (!advanceForm.amount || parseFloat(advanceForm.amount) <= 0)
@@ -224,7 +223,6 @@ export default function Billing() {
         paymentDate: new Date().toISOString().split('T')[0],
       });
 
-      // Balance refresh karo
       const r    = await advanceAPI.getBalance(customerId);
       const data = r.data.data;
       setAdvanceBalance(data.totalBalance || 0);
@@ -364,11 +362,16 @@ export default function Billing() {
           {items.map((it, i) => {
             const isGold     = (it.metalType || 'gold') === 'gold';
             const net        = calcNetWeight(it.grossWeight, it.stoneWeight);
-            const makingPct  = parseFloat(it.makingCharges || 0);
             const activeRate = isGold ? parseFloat(goldRate || 0) : parseFloat(silverRate || 0);
             const metalValue = net * activeRate;
-            const makingValue = metalValue * (makingPct / 100);
-            const total      = metalValue + makingValue + parseFloat(it.stoneCharges || 0);
+            const makingRaw  = parseFloat(it.makingCharges || 0);
+
+            // ✅ FIX: Gold = percent of metalValue, Silver = flat ₹ amount
+            const makingValue = isGold
+              ? metalValue * (makingRaw / 100)
+              : makingRaw;
+
+            const total = metalValue + makingValue + parseFloat(it.stoneCharges || 0);
 
             return (
               <div
@@ -421,7 +424,7 @@ export default function Billing() {
 
                   {isGold && (
                     <div>
-                      <label className="block text-xs font-medium text-gray-500 mb-1">Karat (K) </label>
+                      <label className="block text-xs font-medium text-gray-500 mb-1">Karat (K)</label>
                       <select
                         className="input-field text-xs py-1.5"
                         value={it.purity}
@@ -481,9 +484,13 @@ export default function Billing() {
 
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 items-end">
                   <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1">Making (%)</label>
+                    {/* ✅ FIX: Label changes based on metal type */}
+                    <label className="block text-xs font-medium text-gray-500 mb-1">
+                      {isGold ? 'Making (%)' : 'Making (₹)'}
+                    </label>
                     <input
-                      className="input-field text-xs py-1.5" type="number" placeholder="5"
+                      className="input-field text-xs py-1.5" type="number"
+                      placeholder={isGold ? '5' : '200'}
                       value={it.makingCharges}
                       onChange={e => updateItem(i, 'makingCharges', e.target.value)}
                     />
@@ -496,7 +503,7 @@ export default function Billing() {
                       onChange={e => updateItem(i, 'stoneCharges', e.target.value)}
                     />
                   </div>
-                  {makingPct > 0 && (
+                  {makingRaw > 0 && (
                     <div>
                       <label className="block text-xs font-medium text-gray-400 mb-1">Making Value</label>
                       <div className="input-field text-xs py-1.5 bg-gray-50 text-gray-600 select-none">
@@ -504,7 +511,7 @@ export default function Billing() {
                       </div>
                     </div>
                   )}
-                  <div className={isGold && makingPct > 0 ? '' : 'sm:col-start-4'}>
+                  <div className={isGold && makingRaw > 0 ? '' : 'sm:col-start-4'}>
                     <label className="block text-xs font-medium text-gray-500 mb-1">Item Total</label>
                     <div className={`input-field text-xs py-1.5 font-bold select-none
                       ${isGold ? 'bg-yellow-50 text-yellow-800' : 'bg-gray-100 text-gray-700'}`}>
@@ -534,7 +541,7 @@ export default function Billing() {
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr>{['Description','Weight(g)','Purity','Rate(₹/g)','Value',''].map(h => (
+                <tr>{['Description','Weight(g)','Rate(₹/g)','Value',''].map(h => (
                   <th key={h} className="font-slab table-th">{h}</th>
                 ))}</tr>
               </thead>
@@ -543,9 +550,8 @@ export default function Billing() {
                   const val = parseFloat(ex.grossWeight||0) * parseFloat(ex.exchangeRate||0);
                   return (
                     <tr key={i} className="group">
-                      <td className="table-td"><input className="input-field text-xs py-1.5" placeholder="Old Gold Ring" value={ex.itemDescription} onChange={e=>updateEx(i,'itemDescription',e.target.value)}/></td>
+                      <td className="table-td"><input className="input-field text-xs py-1.5" placeholder="Old Items" value={ex.itemDescription} onChange={e=>updateEx(i,'itemDescription',e.target.value)}/></td>
                       <td className="table-td"><input className="input-field text-xs py-1.5 w-24" type="number" placeholder="5.000" value={ex.grossWeight} onChange={e=>updateEx(i,'grossWeight',e.target.value)}/></td>
-                      <td className="table-td"><select className="input-field text-xs py-1.5 w-20" value={ex.purity} onChange={e=>updateEx(i,'purity',e.target.value)}>{['24K','22K','18K'].map(p=><option key={p}>{p}</option>)}</select></td>
                       <td className="table-td"><input className="input-field text-xs py-1.5 w-24" type="number" placeholder="6800" value={ex.exchangeRate} onChange={e=>updateEx(i,'exchangeRate',e.target.value)}/></td>
                       <td className="table-td font-semibold text-green-600">{fmtINR(val)}</td>
                       <td className="table-td"><button onClick={()=>removeEx(i)} className="text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-all"><Trash2 size={15}/></button></td>
@@ -565,16 +571,24 @@ export default function Billing() {
         <div className="card">
           <h3 className="font-slab font-semibold text-[#050a30] text-sm mb-4">Bill Summary</h3>
           <div className="space-y-2.5 text-sm">
-            {[
-              { label:'Subtotal', val: fmtINR(summary.subtotal) },
-              ...(isGst ? [
-                { label:'CGST @ 1.5%', val: fmtINR(summary.cgst) },
-                { label:'SGST @ 1.5%', val: fmtINR(summary.sgst) },
-              ] : []),
-              ...(summary.exchangeValue > 0 ? [
-                { label:'Exchange Deduction', val:`- ${fmtINR(summary.exchangeValue)}`, cls:'text-green-600' },
-              ] : []),
-            ].map(({ label, val, cls }) => (
+           {[
+  { label:'Subtotal', val: fmtINR(summary.subtotal) },
+  ...(isGst ? [
+    { label:'CGST @ 1.5%', val: fmtINR(summary.cgst) },
+    { label:'SGST @ 1.5%', val: fmtINR(summary.sgst) },
+  ] : []),
+  ...(summary.exchangeValue > 0 ? [
+    { label:'Exchange Deduction', val:`- ${fmtINR(summary.exchangeValue)}`, cls:'text-green-600' },
+  ] : []),
+  // ✅ Round off row — only show if non-zero
+  ...(summary.roundOff !== 0 ? [
+    {
+      label: 'Round Off',
+      val: (summary.roundOff > 0 ? '+ ' : '- ') + fmtINR(Math.abs(summary.roundOff)),
+      cls: 'text-gray-400',
+    },
+  ] : []),
+].map(({ label, val, cls }) => (
               <div key={label} className="flex justify-between">
                 <span className="text-gray-500">{label}</span>
                 <span className={`font-medium ${cls || ''}`}>{val}</span>
@@ -676,10 +690,10 @@ export default function Billing() {
 
             {/* Payment summary box */}
             <div className="bg-gray-50 rounded-xl p-3 space-y-1.5">
-              <div className="flex justify-between text-sm">
+              {/* <div className="flex justify-between text-sm">
                 <span className="font-slab text-gray-500">Cash Paid</span>
                 <span className="font-medium text-green-600">{fmtINR(paidAmount || 0)}</span>
-              </div>
+              </div> */}
               {advanceToUse > 0 && (
                 <div className="flex justify-between text-sm">
                   <span className="font-slab text-gray-500">Advance Used</span>
@@ -728,7 +742,7 @@ export default function Billing() {
         </div>
       </div>
 
-      {/* ── Row 5: Record Advance Payment (fresh advance) ── */}
+      {/* ── Row 5: Record Advance Payment ── */}
       <div className="card">
         <button
           type="button"

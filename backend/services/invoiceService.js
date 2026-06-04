@@ -27,7 +27,7 @@ const C = {
   white:       '#FFFFFF',
 };
 
-const FOOTER_SPACE = 80;
+const FOOTER_SPACE = 45;
 
 const PAGE = {
   width:   595,
@@ -36,9 +36,10 @@ const PAGE = {
   inner:   530,
 };
 
+// ── COLUMN X POSITIONS ───────────────────────────
 const COL = {
   item:    40,
-  purity:  150,
+  karat:   150,
   gross:   190,
   net:     230,
   rate:    270,
@@ -48,13 +49,39 @@ const COL = {
   total:   466,
 };
 
+// ── COLUMN WIDTHS ────────────────────────────────
+const COL_W = {
+  item:    100,
+  karat:   35,
+  gross:   35,
+  net:     35,
+  rate:    45,
+  huid:    50,
+  hsn:     38,
+  making:  46,
+  total:   89,
+};
+
+// ── SAFE NUMBER HELPER ───────────────────────────
+const safeNum = (val) => {
+  const n = parseFloat(val);
+  return isNaN(n) ? 0 : n;
+};
+
+const fmtAmt = (n) =>
+  safeNum(n).toLocaleString('en-IN', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+
 
 export const generateInvoicePDF = async (saleId, shopId) => {
 
   const PLAYFAIR_FONT_PATH = path.join(
-  __dirname,
-  '../assets/fonts/PlayfairDisplay-Bold.ttf'
-);
+    __dirname,
+    '../assets/fonts/PlayfairDisplay-Bold.ttf'
+  );
+
   const sale = await Sale.findOne({
     where:   { id: saleId, shopId },
     include: [
@@ -70,7 +97,6 @@ export const generateInvoicePDF = async (saleId, shopId) => {
   const shop = await Shop.findByPk(shopId);
 
   const doc = new PDFDocument({
-    
     size: 'A4',
     margin: PAGE.margin,
     info: {
@@ -79,10 +105,8 @@ export const generateInvoicePDF = async (saleId, shopId) => {
       Subject: sale.isGst ? 'Jewelry Invoice' : 'Jewelry Estimate',
     },
   });
-  doc.registerFont(
-  'PlayfairDisplayBold',
-  PLAYFAIR_FONT_PATH
-);
+
+  doc.registerFont('PlayfairDisplayBold', PLAYFAIR_FONT_PATH);
 
   const buffers = [];
   doc.on('data', chunk => buffers.push(chunk));
@@ -108,11 +132,9 @@ const drawGSTInvoice = (doc, sale, shop) => {
   y = drawRateStrip(doc, sale, shop, y, true);
   y = drawBillingBlock(doc, sale, shop, y);
   y = drawItemsTable(doc, sale, y);
-
   if (sale.exchangeItems && sale.exchangeItems.length > 0) {
     y = drawExchangeSection(doc, sale.exchangeItems, y);
   }
-
   y = drawGSTSummary(doc, sale, y);
   y = drawPaymentSection(doc, sale, y);
 };
@@ -123,80 +145,82 @@ const drawNonGSTInvoice = (doc, sale, shop) => {
   y = drawRateStrip(doc, sale, shop, y, false);
   y = drawBillingBlock(doc, sale, shop, y);
   y = drawItemsTable(doc, sale, y);
-
   if (sale.exchangeItems && sale.exchangeItems.length > 0) {
     y = drawExchangeSection(doc, sale.exchangeItems, y);
   }
-
   y = drawSimpleSummary(doc, sale, y);
   y = drawPaymentSection(doc, sale, y);
 };
 
 
 // ── HEADER ────────────────────────────────────────
-const drawHeader = (doc, shop, sale, invoiceType) => {
-  const H = 110;
+const drawHeader = (doc, shop, sale, title) => {
+  const startY = 20;
+  const pageWidth = doc.page.width;
 
-  doc.rect(PAGE.margin, PAGE.margin, PAGE.inner, H).fill(C.white);
+  const logoSize = 70;
 
-  const LOGO_SIZE = 90;
-  try {
-    doc.image(LOGO_PATH, PAGE.margin + 6, PAGE.margin + (H - LOGO_SIZE) / 2, {
-      width: LOGO_SIZE, height: LOGO_SIZE, fit: [LOGO_SIZE, LOGO_SIZE],
+  if (LOGO_PATH) {
+    doc.image(LOGO_PATH, PAGE.margin, startY, {
+      fit: [logoSize, logoSize],
     });
-  } catch (_) {}
+  }
 
-  const BIS_SIZE = 90;
-  try {
-    doc.image(BIS_LOGO_PATH, PAGE.width - PAGE.margin - BIS_SIZE - 6, PAGE.margin + (H - BIS_SIZE) / 2, {
-      width: BIS_SIZE, height: BIS_SIZE, fit: [BIS_SIZE, BIS_SIZE],
+  if (BIS_LOGO_PATH) {
+    doc.image(BIS_LOGO_PATH, pageWidth - PAGE.margin - logoSize, startY, {
+      fit: [logoSize, logoSize],
     });
-  } catch (_) {}
+  }
 
-  doc.fontSize(24).fillColor('#CC2200').font('PlayfairDisplayBold')
-     .text(shop.name.toUpperCase(), PAGE.margin + 105, PAGE.margin + 12, {
-       width: PAGE.inner - 210, align: 'center', lineBreak: false,
+  doc.font('PlayfairDisplayBold')
+     .fontSize(24)
+     .fillColor('#D81E05')
+     .text(shop.name.toUpperCase(), 0, startY + 5, {
+        width: pageWidth,
+        align: 'center'
      });
 
-  if (shop.tagline) {
-    doc.fontSize(9).fillColor(C.navy).font('PlayfairDisplayBold')
-       .text(shop.tagline, PAGE.margin + 105, PAGE.margin + 40, {
-         width: PAGE.inner - 210, align: 'center',
-       });
-  }
+  let y = startY + 5;
+  y += 40;
 
-  const addrLine = [shop.address, shop.city].filter(Boolean).join(', ');
-  if (addrLine) {
-    doc.fontSize(10).fillColor(C.navy).font('Helvetica')
-       .text(`Address : ${addrLine}`, PAGE.margin + 110, PAGE.margin + 56, {
-         width: PAGE.inner - 230, align: 'center',
-       });
-  }
-
-  if (shop.phone) {
-    doc.fontSize(9).fillColor(C.navy).font('Helvetica')
-       .text(`Mobile: ${shop.phone}`, PAGE.margin + 105, PAGE.margin + 78, {
-         width: PAGE.inner - 230, align: 'center',
-       });
-  }
-
-  doc.fontSize(8).fillColor(C.navy).font('Helvetica-Bold')
-     .text(invoiceType, PAGE.width - PAGE.margin - 130, PAGE.margin + 90, {
-       width: 124, align: 'right',
+  doc.font('Helvetica')
+     .fontSize(13)
+     .fillColor('#1D4ED8')
+     .text(`Address: ${shop.address || ''}`, 0, y, {
+        width: pageWidth,
+        align: 'center'
      });
 
-  doc.moveTo(PAGE.margin, PAGE.margin + H)
-     .lineTo(PAGE.width - PAGE.margin, PAGE.margin + H)
-     .lineWidth(1.5).stroke(C.navy);
+  y += 15;
 
-  return PAGE.margin + H + 1;
+  doc.fontSize(10).text(`Mobile: ${shop.mobile || ''}`, 0, y, {
+     width: pageWidth,
+     align: 'center'
+  });
+
+  doc.font('Helvetica-Bold')
+     .fontSize(14)
+     .fillColor('#000');
+
+  const textWidth = doc.widthOfString(title);
+  const centerX = (pageWidth - textWidth) / 2;
+  const titleY = startY + 75;
+  doc.text(title, centerX, titleY);
+
+  doc.moveTo(PAGE.margin, startY + 95)
+     .lineTo(pageWidth - PAGE.margin, startY + 95)
+     .strokeColor('#1E3A8A')
+     .lineWidth(1)
+     .stroke();
+
+  return startY + 110;
 };
 
 
 // ── RATE STRIP ────────────────────────────────────
 const drawRateStrip = (doc, sale, shop, y, showGstin) => {
-  const hasSilver = sale.silverRate && parseFloat(sale.silverRate) > 0;
-  const hasGold   = sale.goldRate   && parseFloat(sale.goldRate)   > 0;
+  const hasSilver = sale.silverRate && safeNum(sale.silverRate) > 0;
+  const hasGold   = sale.goldRate   && safeNum(sale.goldRate)   > 0;
   const H = 22;
 
   doc.rect(PAGE.margin, y, PAGE.inner, H).fill(C.goldLighter);
@@ -205,13 +229,15 @@ const drawRateStrip = (doc, sale, shop, y, showGstin) => {
 
   if (hasGold) {
     doc.fontSize(8).fillColor(C.muted).font('Helvetica').text('Gold Rate', textX, y + 7);
-    doc.fontSize(9).fillColor(C.ink).font('Helvetica-Bold').text(`Rs.${fmtAmt(sale.goldRate)}/g`, textX + 52, y + 6);
+    doc.fontSize(9).fillColor(C.ink).font('Helvetica-Bold')
+       .text(`Rs.${fmtAmt(sale.goldRate)}/g`, textX + 52, y + 6);
     textX += 130;
   }
 
   if (hasSilver) {
     doc.fontSize(8).fillColor(C.muted).font('Helvetica').text('Silver Rate', textX, y + 7);
-    doc.fontSize(9).fillColor(C.ink).font('Helvetica-Bold').text(`Rs.${fmtAmt(sale.silverRate)}/g`, textX + 55, y + 6);
+    doc.fontSize(9).fillColor(C.ink).font('Helvetica-Bold')
+       .text(`Rs.${fmtAmt(sale.silverRate)}/g`, textX + 55, y + 6);
   }
 
   if (showGstin && shop.gstin) {
@@ -233,41 +259,67 @@ const drawRateStrip = (doc, sale, shop, y, showGstin) => {
 const drawBillingBlock = (doc, sale, shop, y) => {
   const startY   = y + 14;
   const customer = sale.customer;
+  const leftX    = PAGE.margin;
+  const rightX   = 355;
 
-  doc.fontSize(7.5).fillColor(C.gold).font('Helvetica-Bold')
-     .text('BILL TO', PAGE.margin, startY, { characterSpacing: 1.5 });
-  doc.fontSize(14).fillColor(C.ink).font('Helvetica-Bold')
-     .text(customer.name, PAGE.margin, startY + 11);
-  doc.fontSize(8.5).fillColor(C.muted).font('Helvetica');
+  const cardHeight = 78;
 
-  let detY = startY + 28;
-  if (customer.phone)   { doc.text(`Phone: ${customer.phone}`,     PAGE.margin, detY); detY += 12; }
-  if (customer.address) { doc.text(`Address: ${customer.address}`, PAGE.margin, detY, { width: 240 }); detY += 12; }
+  doc.roundedRect(leftX, startY, 260, cardHeight, 6)
+     .fillAndStroke('#FAFAFA', C.border);
 
-  const rX = 360;
-  doc.fontSize(7.5).fillColor(C.gold).font('Helvetica-Bold')
-     .text('INVOICE DETAILS', rX, startY, { characterSpacing: 1.5, width: 195, align: 'right' });
+  doc.font('Helvetica-Bold').fontSize(7).fillColor(C.gold)
+     .text('BILL TO', leftX + 12, startY + 10, { characterSpacing: 1.5 });
 
-  const hasSilver = sale.silverRate && parseFloat(sale.silverRate) > 0;
-  const hasGold   = sale.goldRate   && parseFloat(sale.goldRate)   > 0;
+  doc.font('Helvetica-Bold').fontSize(14).fillColor(C.ink)
+     .text(customer.name || '-', leftX + 12, startY + 24);
 
-  const metaRows = [
-    [`Invoice No.`, sale.invoiceNumber],
-    [`Date`,        formatDate(sale.saleDate)],
+  let detailY = startY + 45;
 
+  if (customer.phone) {
+    doc.font('Helvetica').fontSize(8.5).fillColor(C.muted)
+       .text(`${customer.phone}`, leftX + 12, detailY);
+    detailY += 13;
+  }
+
+  if (customer.address) {
+    doc.font('Helvetica').fontSize(8.5).fillColor(C.muted)
+       .text(customer.address, leftX + 12, detailY, { width: 230 });
+  }
+
+  const infoWidth = 190;
+
+  doc.roundedRect(rightX, startY, infoWidth, cardHeight, 6)
+     .fillAndStroke('#FAFAFA', C.border);
+
+  doc.font('Helvetica-Bold').fontSize(7).fillColor(C.gold)
+     .text('INVOICE DETAILS', rightX + 12, startY + 10, { characterSpacing: 1.5 });
+
+  const rows = [
+    ['Invoice No.', sale.invoiceNumber],
+    ['Date',        formatDate(sale.saleDate)],
+    ['Time',        formatTime(sale.saleDate)],
   ];
 
-  let mY = startY + 11;
-  metaRows.forEach(([label, val]) => {
-    doc.fontSize(8).fillColor(C.muted).font('Helvetica').text(label, rX, mY, { width: 95 });
-    doc.fontSize(8).fillColor(C.ink).font('Helvetica-Bold').text(val, rX + 95, mY, { width: 100, align: 'right' });
-    mY += 13;
+  let rowY = startY + 26;
+
+  rows.forEach(([label, value]) => {
+    doc.font('Helvetica').fontSize(8).fillColor(C.muted)
+       .text(label, rightX + 12, rowY);
+    doc.font('Helvetica-Bold').fontSize(8).fillColor(C.ink)
+       .text(value || '-', rightX + 85, rowY, { width: 90, align: 'right' });
+    rowY += 14;
+    doc.moveTo(rightX + 12, rowY - 3)
+       .lineTo(rightX + infoWidth - 12, rowY - 3)
+       .lineWidth(0.25).stroke('#EAEAEA');
   });
 
-  const endY = Math.max(detY, mY) + 14;
-  doc.moveTo(PAGE.margin, endY).lineTo(PAGE.width - PAGE.margin, endY).lineWidth(0.4).stroke(C.border);
+  const endY = startY + cardHeight + 18;
 
-  return endY + 14;
+  doc.moveTo(PAGE.margin, endY)
+     .lineTo(PAGE.width - PAGE.margin, endY)
+     .lineWidth(0.6).stroke(C.border);
+
+  return endY + 12;
 };
 
 
@@ -275,91 +327,165 @@ const drawBillingBlock = (doc, sale, shop, y) => {
 const drawItemsTable = (doc, sale, y) => {
   const items = sale.items || [];
 
-  doc.fontSize(7.5).fillColor(C.gold).font('Helvetica-Bold')
-     .text('ITEMS PURCHASED', PAGE.margin, y, { characterSpacing: 1.5 });
+  doc.save();
+  doc.fontSize(8).fillColor(C.gold).font('Helvetica-Bold')
+     .text('ITEMS PURCHASED', PAGE.margin, y, { characterSpacing: 2 });
+
   y += 12;
 
-  const HEADER_H = 20;
-  doc.rect(PAGE.margin, y, PAGE.inner, HEADER_H).fill(C.navy);
-  doc.fontSize(7).fillColor(C.white).font('Helvetica-Bold');
-  doc.text('ITEM',     COL.item,   y + 7, { width: 105 });
-  doc.text('PURITY',   COL.purity, y + 7, { width: 36,  align: 'center' });
-  doc.text('GROSS(g)', COL.gross,  y + 7, { width: 36,  align: 'right'  });
-  doc.text('NET(g)',   COL.net,    y + 7, { width: 36,  align: 'right'  });
-  doc.text('RATE',     COL.rate,   y + 7, { width: 46,  align: 'right'  });
-  doc.text('HUID',     COL.huid,   y + 7, { width: 50,  align: 'center' });
-  doc.text('HSN',      COL.hsn,    y + 7, { width: 38,  align: 'center' });
-  doc.text('MAKING',   COL.making, y + 7, { width: 46,  align: 'right'  });
-  doc.text('TOTAL',    COL.total,  y + 7, { width: 86,  align: 'right'  });
+  doc.moveTo(PAGE.margin, y).lineTo(PAGE.margin + 120, y)
+     .lineWidth(1.2).stroke(C.gold);
+  doc.moveTo(PAGE.margin + 125, y).lineTo(PAGE.width - PAGE.margin, y)
+     .lineWidth(0.3).stroke(C.border);
+
+  y += 10;
+
+  // ── TABLE HEADER ─────────────────────────────────
+  const HEADER_H = 34;
+  const ITEM_HEADER_PADDING = 8;
+
+  doc.rect(PAGE.margin, y, PAGE.inner, HEADER_H).fill('#1E3A8A');
+
+  const hY = y + 12;
+
+  doc.font('Helvetica-Bold').fontSize(8).fillColor('#FFFFFF');
+
+  const ITEM_PADDING = 10;
+
+  const headers = [
+    ['ITEM',   COL.item,   COL_W.item,   'left'],
+    ['KARAT',  COL.karat,  COL_W.karat,  'center'],
+    ['GROSS',  COL.gross,  COL_W.gross,  'right'],
+    ['NET',    COL.net,    COL_W.net,    'right'],
+    ['RATE',   COL.rate,   COL_W.rate,   'right'],
+    ['HUID',   COL.huid,   COL_W.huid,   'center'],
+    ['HSN',    COL.hsn,    COL_W.hsn,    'center'],
+    ['MAKING', COL.making, COL_W.making, 'right'],
+    ['TOTAL',  COL.total,  COL_W.total,  'right'],
+  ];
+
+  headers.forEach(([label, x, w, align]) => {
+    const posX = label === 'ITEM' ? x + ITEM_HEADER_PADDING : x;
+    doc.text(label, posX, hY, { width: w, align, characterSpacing: 0.5 });
+  });
+
   y += HEADER_H;
 
+  // ── ROWS ─────────────────────────────────────────
   items.forEach((item, idx) => {
-    const ROW_H = 26;
-    y = checkPageBreak(doc, y, ROW_H + 10);
+    const ROW_H = 30;
+    y = checkPageBreak(doc, y, ROW_H + 6);
 
-    if (idx % 2 === 1) doc.rect(PAGE.margin, y, PAGE.inner, ROW_H).fill(C.rowAlt);
+    doc.save();
 
-    const textY  = y + 8;
+    const bg = idx % 2 === 0 ? '#FFFFFF' : '#F6F8FC';
+    doc.rect(PAGE.margin, y, PAGE.inner, ROW_H).fill(bg);
+
+    const textY = y + 9;
     const isGold = !item.metalType || item.metalType === 'gold';
-    const itemRate = item.rate
-      ? parseFloat(item.rate)
-      : isGold ? parseFloat(sale.goldRate || 0) : parseFloat(sale.silverRate || 0);
 
-    doc.fontSize(8.5).fillColor(C.ink).font('Helvetica-Bold')
-       .text(item.itemName, COL.item, textY, { width: 105, lineBreak: false });
-    doc.fontSize(6).fillColor(C.muted).font('Helvetica')
-       .text(isGold ? 'GOLD' : 'SILVER', COL.item, y + 17, { width: 40 });
+    const itemRate = safeNum(item.rate) > 0
+      ? safeNum(item.rate)
+      : isGold
+        ? safeNum(sale.goldRate)
+        : safeNum(sale.silverRate);
 
-    if (isGold && item.purity) {
-      const pX = COL.purity + 1;
-      const pW = 34;
-      doc.roundedRect(pX, y + 6, pW, 13, 3).fill(C.goldLighter);
-      doc.fontSize(7).fillColor(C.gold).font('Helvetica-Bold')
-         .text(item.purity, pX, y + 10, { width: pW, align: 'center' });
-    } else if (!isGold && item.purity) {
-      doc.fontSize(7).fillColor(C.muted).font('Helvetica')
-         .text(item.purity, COL.purity, textY, { width: 36, align: 'center' });
+    // ITEM NAME
+    doc.fontSize(9).fillColor(C.ink).font('Helvetica-Bold')
+       .text(item.itemName || '-', COL.item + ITEM_PADDING, textY, {
+         width: COL_W.item - ITEM_PADDING,
+         lineBreak: false,
+       });
+
+    // METAL TAG
+    doc.fontSize(6.5)
+       .fillColor(isGold ? '#B7791F' : '#4A5568')
+       .font('Helvetica-Bold')
+       .text(isGold ? 'GOLD' : 'SILVER', COL.item + ITEM_PADDING, y + 20);
+
+    // KARAT BADGE
+    if (item.purity) {
+      doc.roundedRect(COL.karat + 4, y + 7, 30, 16, 3)
+         .fill(isGold ? C.goldLighter : '#E8EEF7');
+      doc.fontSize(7).fillColor(isGold ? C.gold : '#445566').font('Helvetica-Bold')
+         .text(item.purity, COL.karat + 4, y + 11, { width: 30, align: 'center' });
     } else {
-      doc.fontSize(8).fillColor(C.muted).font('Helvetica')
-         .text('—', COL.purity, textY, { width: 36, align: 'center' });
+      doc.fontSize(8).fillColor(C.muted)
+         .text('—', COL.karat, textY, { width: COL_W.karat, align: 'center' });
     }
 
-    doc.fontSize(8).fillColor(C.ink).font('Helvetica');
-    doc.text(parseFloat(item.grossWeight).toFixed(3), COL.gross, textY, { width: 36, align: 'right' });
-    doc.text(parseFloat(item.netWeight).toFixed(3),   COL.net,   textY, { width: 36, align: 'right' });
-    doc.fontSize(7.5).fillColor(C.ink).font('Helvetica')
-       .text(`Rs.${fmtAmt(itemRate)}`, COL.rate, textY, { width: 46, align: 'right' });
+    // GROSS WEIGHT
+    doc.fontSize(8).fillColor(C.ink).font('Helvetica')
+       .text(safeNum(item.grossWeight).toFixed(3), COL.gross, textY, {
+         width: COL_W.gross, align: 'right',
+       });
 
-    doc.fontSize(7.5).fillColor(item.huid ? C.ink : C.muted).font('Helvetica')
-       .text(item.huid ? String(item.huid) : '—', COL.huid, textY, { width: 50, align: 'center' });
-    doc.fontSize(7.5).fillColor(item.hsnCode ? C.ink : C.muted).font('Helvetica')
-       .text(item.hsnCode ? String(item.hsnCode) : '—', COL.hsn, textY, { width: 38, align: 'center' });
+    // NET WEIGHT
+    doc.text(safeNum(item.netWeight).toFixed(3), COL.net, textY, {
+      width: COL_W.net, align: 'right',
+    });
 
-    if (isGold && item.makingCharges != null) {
-      doc.fontSize(8).fillColor(C.ink).font('Helvetica')
-         .text(`Rs.${fmtAmt(item.makingCharges)}`, COL.making, textY, { width: 46, align: 'right' });
+    // RATE
+    doc.fontSize(7.5).fillColor(C.muted)
+       .text(`Rs ${fmtAmt(itemRate)}`, COL.rate, textY, {
+         width: COL_W.rate, align: 'right',
+       });
+
+    // HUID BADGE
+    if (item.huid) {
+      doc.roundedRect(COL.huid + 2, y + 7, 46, 16, 3).fill('#EAF2FF');
+      doc.fontSize(7).fillColor('#1E40AF').font('Helvetica-Bold')
+         .text(String(item.huid), COL.huid + 2, y + 11, { width: 46, align: 'center' });
     } else {
-      doc.fontSize(8).fillColor(C.muted).font('Helvetica')
-         .text('—', COL.making, textY, { width: 46, align: 'right' });
+      doc.fontSize(8).fillColor(C.muted)
+         .text('—', COL.huid, textY, { width: COL_W.huid, align: 'center' });
     }
 
+    // HSN
+    doc.fontSize(8).fillColor(item.hsnCode ? C.ink : C.muted).font('Helvetica')
+       .text(item.hsnCode || '—', COL.hsn, textY, {
+         width: COL_W.hsn, align: 'center',
+       });
+
+    // ✅ MAKING CHARGES — gold (percent-based) AND silver (flat ₹)
+    if (item.makingCharges != null && safeNum(item.makingCharges) > 0) {
+      doc.fontSize(8.5).fillColor(C.ink).font('Helvetica')
+         .text(`Rs ${fmtAmt(item.makingCharges)}`, COL.making, textY, {
+           width: COL_W.making, align: 'right',
+         });
+    } else {
+      doc.fontSize(8).fillColor(C.muted)
+         .text('—', COL.making, textY, { width: COL_W.making, align: 'right' });
+    }
+
+    // ITEM TOTAL
     doc.fontSize(9).fillColor(C.navy).font('Helvetica-Bold')
-       .text(`Rs.${fmtAmt(item.itemTotal)}`, COL.total, textY, { width: 86, align: 'right' });
+       .text(`Rs ${fmtAmt(item.itemTotal)}`, COL.total, textY - 1, {
+         width: COL_W.total, align: 'right',
+       });
 
-    doc.moveTo(PAGE.margin, y + ROW_H).lineTo(PAGE.width - PAGE.margin, y + ROW_H)
-       .lineWidth(0.3).stroke('rgba(184,151,58,0.2)');
+    // Row divider
+    doc.moveTo(PAGE.margin, y + ROW_H)
+       .lineTo(PAGE.width - PAGE.margin, y + ROW_H)
+       .lineWidth(0.3).stroke('#E6EAF2');
 
+    doc.restore();
     y += ROW_H;
   });
 
-  return y + 12;
+  doc.moveTo(PAGE.margin, y + 2)
+     .lineTo(PAGE.width - PAGE.margin, y + 2)
+     .lineWidth(1).stroke(C.gold);
+
+  doc.restore();
+  return y + 14;
 };
 
 
 // ── EXCHANGE SECTION ──────────────────────────────
 const drawExchangeSection = (doc, exchangeItems, y) => {
-  const PADDING  = 10;
-  const boxH     = 20 + 18 + exchangeItems.length * 18 + PADDING;
+  const PADDING = 10;
+  const boxH    = 20 + 18 + exchangeItems.length * 18 + PADDING;
   y = checkPageBreak(doc, y, boxH + 20);
 
   doc.rect(PAGE.margin, y, PAGE.inner, boxH)
@@ -373,20 +499,18 @@ const drawExchangeSection = (doc, exchangeItems, y) => {
   const tHY = y + PADDING + 14;
   doc.fontSize(7.5).fillColor(C.muted).font('Helvetica');
   doc.text('Description',  iX,       tHY, { width: 140 });
-  doc.text('Weight (g)',   iX + 145, tHY, { width: 60,  align: 'right'  });
-  doc.text('Purity',       iX + 215, tHY, { width: 45,  align: 'center' });
-  doc.text('Rate (Rs./g)', iX + 265, tHY, { width: 70,  align: 'right'  });
-  doc.text('Value',        iX + 340, tHY, { width: 80,  align: 'right'  });
+  doc.text('Weight (g)',   iX + 145, tHY, { width: 60,  align: 'right' });
+  doc.text('Rate (Rs./g)', iX + 265, tHY, { width: 70,  align: 'left'  });
+  doc.text('Value',        iX + 340, tHY, { width: 80,  align: 'right' });
 
   let rY = tHY + 14;
   exchangeItems.forEach(ex => {
     doc.fontSize(8.5).fillColor(C.ink).font('Helvetica');
-    doc.text(ex.itemDescription || 'Old Gold',              iX,       rY, { width: 140 });
-    doc.text(parseFloat(ex.grossWeight).toFixed(3),         iX + 145, rY, { width: 60,  align: 'right'  });
-    doc.text(ex.purity || '22K',                            iX + 215, rY, { width: 45,  align: 'center' });
-    doc.text(fmtAmt(ex.exchangeRate),                       iX + 265, rY, { width: 70,  align: 'right'  });
+    doc.text(ex.itemDescription || 'Old Gold',             iX,       rY, { width: 140 });
+    doc.text(safeNum(ex.grossWeight).toFixed(3),           iX + 145, rY, { width: 60,  align: 'right' });
+    doc.text(fmtAmt(ex.exchangeRate),                      iX + 265, rY, { width: 70,  align: 'left'  });
     doc.fontSize(9).fillColor(C.success).font('Helvetica-Bold')
-       .text(`Rs.${fmtAmt(ex.exchangeValue)}`,              iX + 340, rY, { width: 80,  align: 'right'  });
+       .text(`Rs.${fmtAmt(ex.exchangeValue)}`,             iX + 340, rY, { width: 80,  align: 'right' });
     rY += 18;
   });
 
@@ -408,10 +532,20 @@ const drawGSTSummary = (doc, sale, y) => {
     ['SGST @ 1.5%', `Rs.${fmtAmt(sale.sgstAmount)}`, C.ink],
   ];
 
-  if (parseFloat(sale.exchangeValue) > 0)
-    rows.push([`Exchange Deduction`, `− Rs.${fmtAmt(sale.exchangeValue)}`, C.success]);
-  if (parseFloat(sale.discountAmount) > 0)
-    rows.push([`Discount`, `− Rs.${fmtAmt(sale.discountAmount)}`, C.warning]);
+  if (safeNum(sale.exchangeValue) > 0)
+    rows.push(['Exchange Deduction', `- Rs.${fmtAmt(sale.exchangeValue)}`, C.success]);
+  if (safeNum(sale.discountAmount) > 0)
+    rows.push(['Discount', `- Rs.${fmtAmt(sale.discountAmount)}`, C.warning]);
+
+  // ✅ Round off row
+  if (safeNum(sale.roundOffAmount) !== 0) {
+    const roundOff = safeNum(sale.roundOffAmount);
+    rows.push([
+      'Round Off',
+      `${roundOff > 0 ? '+ ' : '- '}Rs.${fmtAmt(Math.abs(roundOff))}`,
+      C.muted,
+    ]);
+  }
 
   drawAmountInWords(doc, sale.totalAmount, y);
 
@@ -429,10 +563,7 @@ const drawGSTSummary = (doc, sale, y) => {
      .text(`Rs.${fmtAmt(sale.totalAmount)}`, valX, y - 1, { width: valW, align: 'right' });
 
   y += 28;
-
-  // ── Advance used row in summary ──
   y = drawAdvanceSummaryRows(doc, sale, y, sX, valX, valW);
-
   return y;
 };
 
@@ -447,24 +578,36 @@ const drawSimpleSummary = (doc, sale, y) => {
 
   drawAmountInWords(doc, sale.totalAmount, y);
 
-  if (parseFloat(sale.subtotal) !== parseFloat(sale.totalAmount)) {
+  if (safeNum(sale.subtotal) !== safeNum(sale.totalAmount)) {
     doc.fontSize(8.5).fillColor(C.muted).font('Helvetica').text('Subtotal', sX, y, { width: 100 });
     doc.fontSize(8.5).fillColor(C.ink).font('Helvetica-Bold')
        .text(`Rs.${fmtAmt(sale.subtotal)}`, valX, y, { width: valW, align: 'right' });
     y += 15;
   }
 
-  if (parseFloat(sale.exchangeValue) > 0) {
+  if (safeNum(sale.exchangeValue) > 0) {
     doc.fontSize(8.5).fillColor(C.muted).font('Helvetica').text('Exchange Deduction', sX, y, { width: 100 });
     doc.fontSize(8.5).fillColor(C.success).font('Helvetica-Bold')
-       .text(`− Rs.${fmtAmt(sale.exchangeValue)}`, valX, y, { width: valW, align: 'right' });
+       .text(`- Rs.${fmtAmt(sale.exchangeValue)}`, valX, y, { width: valW, align: 'right' });
     y += 15;
   }
 
-  if (parseFloat(sale.discountAmount) > 0) {
+  if (safeNum(sale.discountAmount) > 0) {
     doc.fontSize(8.5).fillColor(C.muted).font('Helvetica').text('Discount', sX, y, { width: 100 });
     doc.fontSize(8.5).fillColor(C.warning).font('Helvetica-Bold')
-       .text(`− Rs.${fmtAmt(sale.discountAmount)}`, valX, y, { width: valW, align: 'right' });
+       .text(`- Rs.${fmtAmt(sale.discountAmount)}`, valX, y, { width: valW, align: 'right' });
+    y += 15;
+  }
+
+  // ✅ Round off row for non-GST invoice too
+  if (safeNum(sale.roundOffAmount) !== 0) {
+    const roundOff = safeNum(sale.roundOffAmount);
+    doc.fontSize(8.5).fillColor(C.muted).font('Helvetica').text('Round Off', sX, y, { width: 100 });
+    doc.fontSize(8.5).fillColor(C.muted).font('Helvetica-Bold')
+       .text(
+         `${roundOff > 0 ? '+ ' : '- '}Rs.${fmtAmt(Math.abs(roundOff))}`,
+         valX, y, { width: valW, align: 'right' }
+       );
     y += 15;
   }
 
@@ -476,33 +619,21 @@ const drawSimpleSummary = (doc, sale, y) => {
      .text(`Rs.${fmtAmt(sale.totalAmount)}`, valX, y - 1, { width: valW, align: 'right' });
 
   y += 28;
-
-  // ── Advance used row in summary ──
   y = drawAdvanceSummaryRows(doc, sale, y, sX, valX, valW);
-
   return y;
 };
 
 
-// ─────────────────────────────────────────────────────────────────
-// ── ADVANCE SUMMARY ROWS ──────────────────────────────────────────
-// Yeh function dono GST aur non-GST summary ke baad call hota hai.
-// Agar sale mein advance use hua ho toh:
-//   - Cash Paid row
-//   - Advance Used row (green highlighted box)
-//   - Total Paid row
-// warna sirf ek "Paid" row dikhao.
-// ─────────────────────────────────────────────────────────────────
+// ── ADVANCE SUMMARY ROWS ──────────────────────────
 const drawAdvanceSummaryRows = (doc, sale, y, sX, valX, valW) => {
   y = checkPageBreak(doc, y, 80);
 
-  const advanceUsed = parseFloat(sale.advanceUsed || 0);
-  const totalPaid   = parseFloat(sale.paidAmount  || 0);
-  const due         = parseFloat(sale.dueAmount   || 0);
-  const cashPaid    = parseFloat((totalPaid - advanceUsed).toFixed(2));
+  const advanceUsed = safeNum(sale.advanceUsed);
+  const totalPaid   = safeNum(sale.paidAmount);
+  const due         = safeNum(sale.dueAmount);
+  const cashPaid    = safeNum((totalPaid - advanceUsed).toFixed(2));
 
   if (advanceUsed > 0) {
-    // ── Cash Paid row (only if cash also paid) ──
     if (cashPaid > 0) {
       doc.fontSize(8.5).fillColor(C.muted).font('Helvetica')
          .text('Cash / UPI Paid', sX, y, { width: 100 });
@@ -511,28 +642,21 @@ const drawAdvanceSummaryRows = (doc, sale, y, sX, valX, valW) => {
       y += 15;
     }
 
-    // ── Advance Used — green highlighted box ──
     const boxH = 20;
     const boxX = sX - 4;
     const boxW = PAGE.width - PAGE.margin - boxX;
 
     doc.rect(boxX, y, boxW, boxH)
-       .fill(C.successLight)
-       .strokeColor('#A3D9B1')
-       .lineWidth(0.5)
-       .stroke();
-
-    // Green left accent bar
+       .fill(C.successLight).strokeColor('#A3D9B1').lineWidth(0.5).stroke();
     doc.rect(boxX, y, 3, boxH).fill(C.success);
 
     doc.fontSize(8.5).fillColor(C.success).font('Helvetica-Bold')
        .text('Advance Used', sX + 2, y + 6, { width: 100 });
     doc.fontSize(8.5).fillColor(C.success).font('Helvetica-Bold')
-       .text(`− Rs.${fmtAmt(advanceUsed)}`, valX, y + 6, { width: valW, align: 'right' });
+       .text(`- Rs.${fmtAmt(advanceUsed)}`, valX, y + 6, { width: valW, align: 'right' });
 
     y += boxH + 6;
 
-    // ── Total Paid row ──
     doc.moveTo(sX, y).lineTo(PAGE.width - PAGE.margin, y).lineWidth(0.5).stroke(C.border);
     y += 4;
 
@@ -543,7 +667,6 @@ const drawAdvanceSummaryRows = (doc, sale, y, sX, valX, valW) => {
     y += 16;
 
   } else {
-    // No advance — simple paid row
     doc.fontSize(8.5).fillColor(C.muted).font('Helvetica')
        .text('Paid Amount', sX, y, { width: 100 });
     doc.fontSize(8.5).fillColor(C.success).font('Helvetica-Bold')
@@ -551,7 +674,6 @@ const drawAdvanceSummaryRows = (doc, sale, y, sX, valX, valW) => {
     y += 15;
   }
 
-  // ── Due Amount row ──
   const dueColor = due > 0 ? C.danger : C.muted;
   doc.fontSize(9).fillColor(C.muted).font('Helvetica')
      .text('Due Amount', sX, y, { width: 100 });
@@ -570,7 +692,7 @@ const drawAmountInWords = (doc, amount, y) => {
   doc.fontSize(7.5).fillColor(C.gold).font('Helvetica-Bold')
      .text('AMOUNT IN WORDS', PAGE.margin + 10, y + 6, { characterSpacing: 1.2 });
   doc.fontSize(8.5).fillColor(C.muted).font('Helvetica-Oblique')
-     .text(amountInWords(parseFloat(amount)), PAGE.margin + 10, y + 18, { width: 265 });
+     .text(amountInWords(safeNum(amount)), PAGE.margin + 10, y + 18, { width: 265 });
 };
 
 
@@ -598,14 +720,13 @@ const drawPaymentSection = (doc, sale, y) => {
 
   y += 24;
 
-  // ── 3-column stat boxes: Total / Paid / Due ──
-  const statW = PAGE.inner / 3;
-  const advanceUsed = parseFloat(sale.advanceUsed || 0);
+  const statW       = PAGE.inner / 3;
+  const advanceUsed = safeNum(sale.advanceUsed);
 
   const stats = [
     { label: 'Total Amount', value: `Rs.${fmtAmt(sale.totalAmount)}`, color: C.ink     },
     { label: 'Paid Amount',  value: `Rs.${fmtAmt(sale.paidAmount)}`,  color: C.success },
-    { label: 'Due Amount',   value: `Rs.${fmtAmt(sale.dueAmount)}`,   color: parseFloat(sale.dueAmount) > 0 ? C.danger : C.muted },
+    { label: 'Due Amount',   value: `Rs.${fmtAmt(sale.dueAmount)}`,   color: safeNum(sale.dueAmount) > 0 ? C.danger : C.muted },
   ];
 
   stats.forEach((stat, i) => {
@@ -620,41 +741,33 @@ const drawPaymentSection = (doc, sale, y) => {
 
   y += 42;
 
-  // ── Advance used badge (below stat boxes) ──
   if (advanceUsed > 0) {
     y = checkPageBreak(doc, y, 28);
-
     const badgeW = PAGE.inner;
     doc.rect(PAGE.margin, y, badgeW, 22)
-       .fill(C.successLight)
-       .strokeColor('#A3D9B1')
-       .lineWidth(0.5)
-       .stroke();
+       .fill(C.successLight).strokeColor('#A3D9B1').lineWidth(0.5).stroke();
     doc.rect(PAGE.margin, y, 3, 22).fill(C.success);
-
     doc.fontSize(8).fillColor(C.success).font('Helvetica-Bold')
        .text(
-         `Advance Payment Used: Rs.${fmtAmt(advanceUsed)}   |   Cash / UPI Paid: Rs.${fmtAmt(Math.max(0, parseFloat(sale.paidAmount) - advanceUsed))}`,
-         PAGE.margin + 10, y + 7,
-         { width: badgeW - 20 }
+         `Advance Payment Used: Rs.${fmtAmt(advanceUsed)}   |   Cash / UPI Paid: Rs.${fmtAmt(Math.max(0, safeNum(sale.paidAmount) - advanceUsed))}`,
+         PAGE.margin + 10, y + 7, { width: badgeW - 20 }
        );
-
     y += 26;
   }
 
-  // ── Payment history ──
   if (sale.payments && sale.payments.length > 0) {
     y = checkPageBreak(doc, y, 28);
     doc.fontSize(7.5).fillColor(C.gold).font('Helvetica-Bold')
        .text('PAYMENT HISTORY', PAGE.margin, y + 8, { characterSpacing: 1.5 });
-    y += 20;
+    y += 30;
 
     sale.payments.forEach((pmt, i) => {
-      y = checkPageBreak(doc, y, 22);
+      y = checkPageBreak(doc, y, 24);
       if (i % 2 === 0) doc.rect(PAGE.margin, y, PAGE.inner, 18).fill(C.ivory);
       doc.circle(PAGE.margin + 10, y + 9, 3).fill(C.gold);
+
       doc.fontSize(8.5).fillColor(C.muted).font('Helvetica')
-         .text(`${i + 1}. ${formatDate(pmt.paymentDate)}`, PAGE.margin + 20, y + 5, { width: 140 });
+         .text(`${i + 1}. ${formatDateTime(pmt.paymentDate)}`, PAGE.margin + 20, y + 5, { width: 160 });
 
       const modeW = 45;
       const modeX = PAGE.width - PAGE.margin - modeW - 100;
@@ -672,7 +785,7 @@ const drawPaymentSection = (doc, sale, y) => {
 
 
 // ── UTILITIES ─────────────────────────────────────
-const checkPageBreak = (doc, y, neededHeight = 60) => {
+const checkPageBreak = (doc, y, neededHeight = 28) => {
   if (y + neededHeight > PAGE.height - FOOTER_SPACE) {
     doc.addPage();
     return PAGE.margin;
@@ -680,16 +793,23 @@ const checkPageBreak = (doc, y, neededHeight = 60) => {
   return y;
 };
 
-const fmtAmt = (n) =>
-  parseFloat(n || 0).toLocaleString('en-IN', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-
 const formatDate = (d) =>
   new Date(d).toLocaleDateString('en-IN', {
-    day: '2-digit', month: 'short', year: 'numeric',
+    timeZone: 'Asia/Kolkata',
+    day:      '2-digit',
+    month:    'short',
+    year:     'numeric',
   });
+
+const formatTime = (d) =>
+  new Date(d).toLocaleTimeString('en-IN', {
+    timeZone: 'Asia/Kolkata',
+    hour:     '2-digit',
+    minute:   '2-digit',
+    hour12:   true,
+  }).toUpperCase();
+
+const formatDateTime = (d) => `${formatDate(d)}, ${formatTime(d)}`;
 
 const amountInWords = (amount) => {
   const ones = [

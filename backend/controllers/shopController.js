@@ -177,3 +177,80 @@ export const getExpiringShops = async (req, res) => {
     res.status(500).json({ success: false, message: 'Server error' });
   }
 };
+// PUT /api/shops/:id
+export const updateShop = async (req, res) => {
+  try {
+    const shop = await Shop.findByPk(req.params.id);
+    if (!shop) return res.status(404).json({ success: false, message: 'Shop not found' });
+
+    const {
+      // Shop details
+      shopName, ownerName, phone, email,
+      address, city, state, gstin,
+      // Admin account (optional update)
+      adminName, adminEmail, adminPassword,
+    } = req.body;
+
+    // ─ Step 1: Shop update ─────────────────────
+    await shop.update({
+      ...(shopName   && { name: shopName }),
+      ...(ownerName  && { ownerName }),
+      ...(phone      && { phone }),
+      ...(email      && { email }),
+      ...(address    && { address }),
+      ...(city       && { city }),
+      ...(state      && { state }),
+      ...(gstin      && { gstin }),
+    });
+
+    // ─ Step 2: Admin update (if provided) ──────
+    if (adminName || adminEmail || adminPassword) {
+      const admin = await User.findOne({
+        where: { shopId: shop.id, role: 'shop_admin' },
+      });
+
+      if (admin) {
+        await admin.update({
+          ...(adminName     && { name: adminName }),
+          ...(adminEmail    && { email: adminEmail }),
+          ...(adminPassword && { password: adminPassword }),
+        });
+      }
+    }
+
+    // ─ Step 3: Fetch updated shop with relations ─
+    const updatedShop = await Shop.findByPk(shop.id, {
+      include: [
+        {
+          model: Subscription,
+          as: 'subscriptions',
+          where: { isActive: true },
+          required: false,
+          order: [['endDate', 'DESC']],
+          limit: 1,
+        },
+        {
+          model: User,
+          as: 'users',
+          attributes: ['id', 'name', 'email', 'role'],
+        },
+      ],
+    });
+
+    res.json({
+      success: true,
+      message: 'Shop updated successfully!',
+      data: updatedShop,
+    });
+
+  } catch (error) {
+    if (error.name === 'SequelizeUniqueConstraintError') {
+      return res.status(400).json({
+        success: false,
+        message: 'This email is already registered',
+      });
+    }
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+};

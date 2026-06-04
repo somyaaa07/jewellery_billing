@@ -35,7 +35,8 @@ export const shopAPI = {
   toggle:  (id)      => api.patch(`/shops/${id}/toggle`),
   getById: (id)      => api.get(`/shops/${id}`),  
   getExpiring:()       => api.get('/shops/expiring'),
-  
+  // services/api.js
+update: (id, data) => api.put(`/shops/${id}`, data),
 };
 
 export const customerAPI = {

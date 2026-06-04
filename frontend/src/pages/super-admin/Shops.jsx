@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import {
   Search, Plus, Building2, ToggleLeft,
-  ToggleRight, Link2, Copy, CheckCircle, AlertCircle,
+  ToggleRight, Link2, Copy, CheckCircle, AlertCircle,Pencil
 } from 'lucide-react';
 import { shopAPI, authAPI } from '../../services/api';
 import { fmtDate }          from '../../utils/helper';
@@ -28,6 +28,8 @@ export default function Shops() {
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteData, setInviteData] = useState(null);  // { inviteToken, registrationLink, shopName }
   const [copied,     setCopied]     = useState(false);
+  const [editOpen, setEditOpen]   = useState(false);
+const [editShop, setEditShop]   = useState(null); 
 
   // Form
   const [form,   setForm]   = useState(EMPTY_FORM);
@@ -70,6 +72,50 @@ export default function Shops() {
       setError(err.response?.data?.message || 'Failed to create shop');
     } finally { setSaving(false); }
   };
+  // 3. Open edit modal — pre-fill form with shop's current data
+const handleEditOpen = (shop) => {
+  const sub = shop.subscriptions?.[0];
+  setEditShop(shop);
+  setForm({
+    shopName:  shop.name        || '',
+    ownerName: shop.ownerName   || '',
+    phone:     shop.phone       || '',
+    email:     shop.email       || '',
+    address:   shop.address     || '',
+    city:      shop.city        || '',
+    state:     shop.state       || '',
+    gstin:     shop.gstin       || '',
+    // Admin fields — optional on update
+    adminName:     '',
+    adminEmail:    '',
+    adminPassword: '',
+    // Subscription (read-only display, not sent on update)
+    plan:      sub?.plan      || 'monthly',
+    startDate: sub?.startDate?.split('T')[0] || '',
+    endDate:   sub?.endDate?.split('T')[0]   || '',
+    amount:    sub?.amount    || '',
+  });
+  setError('');
+  setEditOpen(true);
+};
+// 4. Submit update
+const handleUpdate = async (e) => {
+  e.preventDefault();
+  setError('');
+  if (!form.shopName || !form.ownerName || !form.phone) {
+    return setError('Shop Name, Owner Name and Phone are required (*)');
+  }
+  try {
+    setSaving(true);
+    await shopAPI.update(editShop.id, form);
+    setEditOpen(false);
+    setEditShop(null);
+    setForm(EMPTY_FORM);
+    load();
+  } catch (err) {
+    setError(err.response?.data?.message || 'Failed to update shop');
+  } finally { setSaving(false); }
+};
 
   // ── Toggle shop active/inactive ───────────
   const handleToggle = async (shop) => {
@@ -223,30 +269,42 @@ export default function Shops() {
                     </td>
 
                     {/* Actions */}
-                    <td className="table-td">
-                      <div className="flex items-center gap-2">
-                        {/* Invite link */}
-                        <button
-                          onClick={() => handleInvite(shop)}
-                          title="Generate invite link for shop admin"
-                          className="p-1.5 rounded-lg hover:bg-blue-50 text-blue-500 hover:text-blue-700 transition-colors"
-                        >
-                          <Link2 size={15} />
-                        </button>
-                        {/* Toggle active */}
-                        <button
-                          onClick={() => handleToggle(shop)}
-                          title={shop.isActive ? 'Deactivate shop' : 'Activate shop'}
-                          className={`p-1.5 rounded-lg transition-colors ${
-                            shop.isActive
-                              ? 'hover:bg-red-50 text-green-500 hover:text-red-500'
-                              : 'hover:bg-green-50 text-gray-400 hover:text-green-600'
-                          }`}
-                        >
-                          {shop.isActive ? <ToggleRight size={18} /> : <ToggleLeft size={18} />}
-                        </button>
-                      </div>
-                    </td>
+                  <td className="table-td">
+  <div className="flex items-center gap-2">
+
+    {/* Invite link */}
+    <button
+      onClick={() => handleInvite(shop)}
+      title="Generate invite link for shop admin"
+      className="p-1.5 rounded-lg hover:bg-blue-50 text-blue-500 hover:text-blue-700 transition-colors"
+    >
+      <Link2 size={15} />
+    </button>
+
+    {/* Toggle active */}
+    <button
+      onClick={() => handleToggle(shop)}
+      title={shop.isActive ? 'Deactivate shop' : 'Activate shop'}
+      className={`p-1.5 rounded-lg transition-colors ${
+        shop.isActive
+          ? 'hover:bg-red-50 text-green-500 hover:text-red-500'
+          : 'hover:bg-green-50 text-gray-400 hover:text-green-600'
+      }`}
+    >
+      {shop.isActive ? <ToggleRight size={18} /> : <ToggleLeft size={18} />}
+    </button>
+
+    {/* Edit */}
+    <button
+      onClick={() => handleEditOpen(shop)}
+      title="Edit shop"
+      className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition-colors"
+    >
+      <Pencil size={14} />
+    </button>
+
+  </div>
+</td>
                   </tr>
                 );
               })}
@@ -362,7 +420,84 @@ export default function Shops() {
           </div>
         </form>
       </Modal>
+{/* ── EDIT SHOP MODAL — paste after the CREATE SHOP MODAL ── */}
+<Modal open={editOpen} onClose={() => setEditOpen(false)} title="Edit Shop" size="xl">
+  <form onSubmit={handleUpdate} className="space-y-6">
+    {error && (
+      <div className="bg-red-50 border border-red-200 text-red-600 text-sm rounded-xl px-4 py-3 flex items-center gap-2">
+        <AlertCircle size={15} /> {error}
+      </div>
+    )}
 
+    {/* Shop details — identical fields to Create */}
+    <div>
+      <h4 className="font-slab text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
+        Shop Information
+      </h4>
+      <div className="grid sm:grid-cols-2 gap-4">
+        {[
+          { l:'Shop Name *',  n:'shopName',  t:'text',  p:'Suresh Jewellers' },
+          { l:'Owner Name *', n:'ownerName', t:'text',  p:'Suresh Kumar'     },
+          { l:'Phone *',      n:'phone',     t:'tel',   p:'9876543210'       },
+          { l:'Email',        n:'email',     t:'email', p:'info@sureshj.com' },
+          { l:'Address',      n:'address',   t:'text',  p:'123 Gold Market'  },
+          { l:'City',         n:'city',      t:'text',  p:'Mumbai'           },
+          { l:'State',        n:'state',     t:'text',  p:'Maharashtra'      },
+          { l:'GSTIN',        n:'gstin',     t:'text',  p:'27AAPFU0939F1ZV'  },
+        ].map(f => (
+          <div key={f.n}>
+            <label className="block text-xs font-medium text-gray-600 mb-1.5">{f.l}</label>
+            <input
+              className="input-field"
+              type={f.t}
+              name={f.n}
+              placeholder={f.p}
+              value={form[f.n]}
+              onChange={onFormChange}
+            />
+          </div>
+        ))}
+      </div>
+    </div>
+
+    {/* Admin — all optional on edit */}
+    <div>
+      <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
+        Shop Admin Account <span className="normal-case font-normal text-gray-300">(leave blank to keep unchanged)</span>
+      </h4>
+      <div className="grid sm:grid-cols-3 gap-4">
+        {[
+          { l:'Admin Name',  n:'adminName',     t:'text',     p:'Ramesh Shah'       },
+          { l:'Admin Email', n:'adminEmail',    t:'email',    p:'ramesh@sureshj.com'},
+          { l:'New Password',n:'adminPassword', t:'password', p:'Leave blank to keep'},
+        ].map(f => (
+          <div key={f.n}>
+            <label className="block text-xs font-medium text-gray-600 mb-1.5">{f.l}</label>
+            <input
+              className="input-field"
+              type={f.t}
+              name={f.n}
+              placeholder={f.p}
+              value={form[f.n]}
+              onChange={onFormChange}
+            />
+          </div>
+        ))}
+      </div>
+    </div>
+
+    <div className="flex gap-3 pt-2">
+      <button type="button" onClick={() => setEditOpen(false)} className="btn-secondary flex-1 justify-center">
+        Cancel
+      </button>
+      <button type="submit" disabled={saving} className="btn-primary flex-1 justify-center">
+        {saving
+          ? <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Saving...</>
+          : <><Pencil size={15} />Save Changes</>}
+      </button>
+    </div>
+  </form>
+</Modal>
       {/* ── INVITE LINK MODAL ── */}
       <Modal open={inviteOpen} onClose={() => setInviteOpen(false)} title="Shop Admin Invite Link" size="sm">
         {inviteData && (

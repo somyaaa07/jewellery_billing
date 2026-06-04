@@ -28,6 +28,17 @@ const validateItemByMetalType = (item, idx) => {
     }
   }
 
+  // ✅ Silver: only flat making charge accepted
+  if (metalType === 'silver') {
+    if (
+      item.makingCharges === undefined ||
+      item.makingCharges === null ||
+      item.makingCharges === ''
+    ) {
+      return `Item ${idx + 1}: Silver ke liye makingCharges (flat amount) required hai`;
+    }
+  }
+
   return null;
 };
 
@@ -51,8 +62,6 @@ export const createSale = async (req, res) => {
       notes,
     } = req.body;
 
-    // advanceUsedAmount  = existing advance balance jo billing pe use ho raha hai (Billing.jsx se aata hai)
-    // advanceReceivedAmount = fresh advance jo customer abhi de raha hai (sale ke saath)
     const advanceUsed     = parseFloat(req.body.advanceUsedAmount     || 0);
     const advanceReceived = parseFloat(req.body.advanceReceivedAmount || 0);
 
@@ -100,20 +109,14 @@ export const createSale = async (req, res) => {
     }
 
     // ── Invoice Number ──
- // ── Invoice Number ──
-const invoiceCount = await Sale.count({
-  where: {
-    shopId,
-    isGst: !!isGst
-  }
-});
+    const invoiceCount = await Sale.count({
+      where: { shopId, isGst: !!isGst },
+    });
 
-const year = new Date().getFullYear();
-const seq  = String(invoiceCount + 1).padStart(4, '0');
-
-const prefix = isGst ? 'GST' : 'EST';
-
-const invoiceNumber = `${prefix}-${shopId}-${year}-${seq}`;
+    const year          = new Date().getFullYear();
+    const seq           = String(invoiceCount + 1).padStart(4, '0');
+    const prefix        = isGst ? 'GST' : 'EST';
+    const invoiceNumber = `${prefix}-${shopId}-${year}-${seq}`;
 
     // ── Items Calculate ──
     let subtotal = 0;
@@ -127,19 +130,24 @@ const invoiceNumber = `${prefix}-${shopId}-${year}-${seq}`;
       const metalValue   = netWeight * activeRate;
       const stoneCharges = parseFloat(item.stoneCharges || 0);
 
+      // ✅ Making charge: silver = flat ₹, gold = percent preferred else flat
       let making = 0;
-      if (
-        item.makingChargesPercent !== undefined &&
-        item.makingChargesPercent !== null &&
-        item.makingChargesPercent !== ''
-      ) {
-        making = (metalValue * parseFloat(item.makingChargesPercent || 0)) / 100;
-      } else if (
-        item.makingCharges !== undefined &&
-        item.makingCharges !== null &&
-        item.makingCharges !== ''
-      ) {
+      if (metalType === 'silver') {
         making = parseFloat(item.makingCharges || 0);
+      } else {
+        if (
+          item.makingChargesPercent !== undefined &&
+          item.makingChargesPercent !== null &&
+          item.makingChargesPercent !== ''
+        ) {
+          making = (metalValue * parseFloat(item.makingChargesPercent || 0)) / 100;
+        } else if (
+          item.makingCharges !== undefined &&
+          item.makingCharges !== null &&
+          item.makingCharges !== ''
+        ) {
+          making = parseFloat(item.makingCharges || 0);
+        }
       }
 
       const itemTotal = metalValue + making + stoneCharges;
@@ -148,14 +156,14 @@ const invoiceNumber = `${prefix}-${shopId}-${year}-${seq}`;
       return {
         metalType,
         itemName:             item.itemName || 'Item',
-        huid:                 item.huid    || null,
-        hsnCode:              item.hsnCode || null,
+        huid:                 item.huid     || null,
+        hsnCode:              item.hsnCode  || null,
         purity:               metalType === 'gold' ? (item.purity || '22K') : (item.purity || null),
         rate:                 activeRate,
         grossWeight:          parseFloat(item.grossWeight || 0),
         stoneWeight:          parseFloat(item.stoneWeight || 0),
         netWeight:            parseFloat(netWeight.toFixed(3)),
-        makingChargesPercent: parseFloat(item.makingChargesPercent || 0),
+        makingChargesPercent: metalType === 'silver' ? 0 : parseFloat(item.makingChargesPercent || 0),
         makingCharges:        parseFloat(making.toFixed(2)),
         stoneCharges,
         itemTotal:            parseFloat(itemTotal.toFixed(2)),
@@ -181,19 +189,23 @@ const invoiceNumber = `${prefix}-${shopId}-${year}-${seq}`;
       };
     });
 
-    // ── Final Total ──
-    const totalAmount = parseFloat(
+    // ── Final Total with Round Off ──
+    const totalBeforeRound = parseFloat(
       (subtotal + cgstAmount + sgstAmount - totalExchangeValue).toFixed(2)
     );
+    const totalAmount    = Math.round(totalBeforeRound);                          // ✅ rounded to nearest ₹
+    const roundOffAmount = parseFloat((totalAmount - totalBeforeRound).toFixed(2)); // ✅ +/- difference
+
+    console.log('totalBeforeRound:', totalBeforeRound);
+    console.log('totalAmount (rounded):', totalAmount);
+    console.log('roundOffAmount:', roundOffAmount);
 
     // ── Payment calculation ──
-    // advanceUsed is already capped on frontend (Math.min(advanceBalance, total))
-    // but we double-cap here for safety
-    const cashPaid        = parseFloat(paidAmount || 0);
-    const advanceApplied  = parseFloat(Math.min(advanceUsed, Math.max(0, totalAmount - cashPaid)).toFixed(2));
-    const totalPaid       = parseFloat((cashPaid + advanceApplied).toFixed(2));
-    const due             = parseFloat(Math.max(0, totalAmount - totalPaid).toFixed(2));
-    const status          = due <= 0 ? 'paid' : totalPaid > 0 ? 'partial' : 'due';
+    const cashPaid       = parseFloat(paidAmount || 0);
+    const advanceApplied = parseFloat(Math.min(advanceUsed, Math.max(0, totalAmount - cashPaid)).toFixed(2));
+    const totalPaid      = parseFloat((cashPaid + advanceApplied).toFixed(2));
+    const due            = parseFloat(Math.max(0, totalAmount - totalPaid).toFixed(2));
+    const status         = due <= 0 ? 'paid' : totalPaid > 0 ? 'partial' : 'due';
 
     console.log('totalAmount:', totalAmount);
     console.log('cashPaid:', cashPaid);
@@ -216,6 +228,7 @@ const invoiceNumber = `${prefix}-${shopId}-${year}-${seq}`;
         sgstAmount,
         exchangeValue:  parseFloat(totalExchangeValue.toFixed(2)),
         discountAmount: 0,
+        roundOffAmount,   // ✅ new field
         totalAmount,
         paidAmount:     totalPaid,
         dueAmount:      due,
@@ -254,8 +267,6 @@ const invoiceNumber = `${prefix}-${shopId}-${year}-${seq}`;
 
     // ────────────────────────────────────────────────────────────
     // ── DEDUCT EXISTING ADVANCE BALANCE (FIFO) ──
-    // Jab billing pe customer ka existing advance use hota hai
-    // tab unke AdvancePayment records se remainingBalance deduct karo
     // ────────────────────────────────────────────────────────────
     if (advanceApplied > 0) {
       const activeAdvances = await AdvancePayment.findAll({
@@ -265,7 +276,7 @@ const invoiceNumber = `${prefix}-${shopId}-${year}-${seq}`;
           status:           { [Op.in]: ['active', 'partially_refunded'] },
           remainingBalance: { [Op.gt]: 0 },
         },
-        order: [['paymentDate', 'ASC'], ['createdAt', 'ASC']], // FIFO — purana pehle
+        order: [['paymentDate', 'ASC'], ['createdAt', 'ASC']],
         lock:  t.LOCK.UPDATE,
         transaction: t,
       });
@@ -279,7 +290,6 @@ const invoiceNumber = `${prefix}-${shopId}-${year}-${seq}`;
         const newBalance = parseFloat((available - toUse).toFixed(2));
         const newStatus  = newBalance <= 0 ? 'fully_used' : advance.status;
 
-        // Transaction audit entry
         await AdvanceTransaction.create(
           {
             shopId,
@@ -287,7 +297,7 @@ const invoiceNumber = `${prefix}-${shopId}-${year}-${seq}`;
             advancePaymentId: advance.id,
             saleId:           sale.id,
             type:             'utilized',
-            amount:           -toUse,       // negative = debit
+            amount:           -toUse,
             balanceBefore:    available,
             balanceAfter:     newBalance,
             notes:            `Used in invoice #${invoiceNumber}`,
@@ -296,7 +306,6 @@ const invoiceNumber = `${prefix}-${shopId}-${year}-${seq}`;
           { transaction: t }
         );
 
-        // AdvancePayment record update
         await advance.update(
           { remainingBalance: newBalance, status: newStatus },
           { transaction: t }
@@ -308,13 +317,11 @@ const invoiceNumber = `${prefix}-${shopId}-${year}-${seq}`;
 
     // ────────────────────────────────────────────────────────────
     // ── FRESH ADVANCE RECEIVED with this sale ──
-    // Agar customer ne sale ke saath naya advance diya ho
     // ────────────────────────────────────────────────────────────
     if (advanceReceived > 0) {
-      // Fresh advance mein se agar kuch bill pe apply hua to baaki future ke liye
-      const remainingAfterCash      = parseFloat(Math.max(0, totalAmount - cashPaid).toFixed(2));
-      const freshAdvanceApplied     = parseFloat(Math.min(advanceReceived, remainingAfterCash).toFixed(2));
-      const freshAdvanceForFuture   = parseFloat(Math.max(0, advanceReceived - freshAdvanceApplied).toFixed(2));
+      const remainingAfterCash    = parseFloat(Math.max(0, totalAmount - cashPaid).toFixed(2));
+      const freshAdvanceApplied   = parseFloat(Math.min(advanceReceived, remainingAfterCash).toFixed(2));
+      const freshAdvanceForFuture = parseFloat(Math.max(0, advanceReceived - freshAdvanceApplied).toFixed(2));
 
       const advanceRecord = await AdvancePayment.create(
         {
@@ -331,7 +338,6 @@ const invoiceNumber = `${prefix}-${shopId}-${year}-${seq}`;
         { transaction: t }
       );
 
-      // Transaction: received
       await AdvanceTransaction.create(
         {
           shopId,
@@ -348,7 +354,6 @@ const invoiceNumber = `${prefix}-${shopId}-${year}-${seq}`;
         { transaction: t }
       );
 
-      // Transaction: utilized (if any applied to this bill)
       if (freshAdvanceApplied > 0) {
         await AdvanceTransaction.create(
           {
@@ -376,8 +381,6 @@ const invoiceNumber = `${prefix}-${shopId}-${year}-${seq}`;
       );
     }
 
-    // ── Decrement Customer totalDue if advance was used ──
-    // (advance use hone se customer ka due kam hota hai)
     if (advanceApplied > 0) {
       await Customer.decrement(
         'totalDue',
@@ -434,7 +437,12 @@ export const getAllSales = async (req, res) => {
     if (customerId) where.customerId = customerId;
 
     if (startDate && endDate) {
-      where.saleDate = { [Op.between]: [startDate, endDate] };
+      where.saleDate = {
+        [Op.between]: [
+          new Date(`${startDate}T00:00:00`),
+          new Date(`${endDate}T23:59:59`),
+        ],
+      };
     }
 
     const searchCondition = search

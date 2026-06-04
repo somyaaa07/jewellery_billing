@@ -230,7 +230,7 @@ export default function InvoiceView() {
                 <tr className="border-b border-gray-100">
                   <th className="text-left text-xs font-semibold text-gray-500 pb-2 pr-3">Item</th>
                   <th className="text-left text-xs font-semibold text-gray-500 pb-2 pr-3">Metal</th>
-                  <th className="text-left text-xs font-semibold text-gray-500 pb-2 pr-3">Purity</th>
+                  <th className="text-left text-xs font-semibold text-gray-500 pb-2 pr-3">Karat</th>
                   {hasHsn  && <th className="text-left text-xs font-semibold text-gray-500 pb-2 pr-3">HSN</th>}
                   {hasHuid && <th className="text-left text-xs font-semibold text-gray-500 pb-2 pr-3">HUID</th>}
                   <th className="text-left text-xs font-semibold text-gray-500 pb-2 pr-3">Rate</th>
@@ -305,7 +305,7 @@ export default function InvoiceView() {
               {sale.exchangeItems.map((ex, i) => (
                 <div key={i} className="flex justify-between text-sm">
                   <span className="text-green-700">
-                    {ex.itemDescription} ({ex.purity}) — {fmtWt(ex.grossWeight)} @ ₹{ex.exchangeRate}/g
+                    {ex.itemDescription}  — {fmtWt(ex.grossWeight)} @ ₹{ex.exchangeRate}/g
                   </span>
                   <span className="font-semibold text-green-700">−{fmtINR(ex.exchangeValue)}</span>
                 </div>
@@ -352,7 +352,6 @@ export default function InvoiceView() {
                 </div>
               )}
 
-              {/* ── Advance Used — highlighted box ── */}
               {advanceUsed > 0 && (
                 <div className="flex justify-between items-center bg-green-50 border border-green-200 rounded-lg px-3 py-2 -mx-1">
                   <span className="text-green-700 font-medium flex items-center gap-1.5">

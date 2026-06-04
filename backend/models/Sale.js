@@ -29,7 +29,7 @@ Sale.init(
     },
 
     saleDate: {
-      type:         DataTypes.DATEONLY,
+      type:         DataTypes.DATE,
       defaultValue: DataTypes.NOW,
     },
 
@@ -108,6 +108,10 @@ Sale.init(
       type:         DataTypes.ENUM('paid', 'partial', 'due'),
       defaultValue: 'due',
     },
+    roundOffAmount: {
+  type: DataTypes.DECIMAL(10, 2),
+  defaultValue: 0,
+},
 
     notes: {
       type: DataTypes.TEXT,
