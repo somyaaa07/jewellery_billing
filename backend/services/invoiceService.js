@@ -334,9 +334,7 @@ const drawBillingBlock = (doc, sale, shop, y) => {
     doc.font('Helvetica-Bold').fontSize(8).fillColor(C.ink)
        .text(value || '-', rightX + 85, rowY, { width: 90, align: 'right' });
     rowY += 14;
-    doc.moveTo(rightX, rowY - 3)
-       .lineTo(rightX + infoWidth - 12, rowY - 3)
-       .lineWidth(0.25).stroke('#EAEAEA');
+   
   });
 
   const endY = startY + cardHeight + 18;
