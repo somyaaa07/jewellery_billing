@@ -22,7 +22,7 @@ const EMPTY_ITEM = {
 
 const EMPTY_EX = { itemDescription:'Old Gold', grossWeight:'', purity:'22K', exchangeRate:'' };
 
-const GOLD_PURITIES   = ['24K','22K','18K','14K'];
+const GOLD_PURITIES   = ['24K','22K','20k','18K','14K'];
 const SILVER_PURITIES = ['999','925','800'];
 
 const DEFAULT_HSN = { gold: '7113', silver: '7114' };

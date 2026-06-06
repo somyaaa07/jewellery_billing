@@ -39,27 +39,31 @@ const PAGE = {
 // ── COLUMN X POSITIONS ───────────────────────────
 const COL = {
   item:    40,
-  karat:   150,
-  gross:   190,
-  net:     230,
-  rate:    270,
-  huid:    320,
-  hsn:     374,
-  making:  416,
-  total:   466,
+  karat:   140,
+  gross:   178,
+  net:     216,
+  stone:   254,
+  stoneC:  286,
+  rate:    326,
+  huid:    368,
+  hsn:     414,
+  making:  450,
+  total:   490,
 };
 
 // ── COLUMN WIDTHS ────────────────────────────────
 const COL_W = {
-  item:    100,
-  karat:   35,
-  gross:   35,
-  net:     35,
-  rate:    45,
-  huid:    50,
-  hsn:     38,
-  making:  46,
-  total:   89,
+  item:    90,
+  karat:   33,
+  gross:   33,
+  net:     33,
+  stone:   28,
+  stoneC:  36,
+  rate:    38,
+  huid:    42,
+  hsn:     32,
+  making:  36,
+  total:   65,
 };
 
 // ── SAFE NUMBER HELPER ───────────────────────────
@@ -157,7 +161,7 @@ const drawNonGSTInvoice = (doc, sale, shop) => {
 const drawHeader = (doc, shop, sale, title) => {
   const startY    = 20;
   const pageWidth = doc.page.width;
-  const logoSize  = 90; // ✅ increased from 70
+  const logoSize  = 90;
 
   // ── LEFT LOGO ──
   try {
@@ -184,29 +188,30 @@ const drawHeader = (doc, shop, sale, title) => {
        width: centerContentW,
        align: 'center',
      });
-// ── ADDRESS ──
+
+  // ── ADDRESS ──
   doc.font('Helvetica-Bold')
      .fontSize(10)
      .fillColor('#1D4ED8')
      .text(
        `Address: ${shop.address || ''}`,
        centerContentX,
-       startY + 46,                 // ✅ thoda neeche push — logo se gap
+       startY + 46,
        {
          width:       centerContentW,
          align:       'center',
          lineBreak:   true,
-         lineGap:     1,            // ✅ line spacing kam
+         lineGap:     1,
          wordSpacing: 2,
        }
      );
 
   const addressHeight = doc.heightOfString(
     `Address: ${shop.address || ''}`,
-    { width: centerContentW, fontSize: 9, lineGap: 1 }  // ✅ match karo lineGap
+    { width: centerContentW, fontSize: 9, lineGap: 1 }
   );
 
-  const mobileY = startY + 36 + addressHeight + 15;  // ✅ address ke baad 6px gap
+  const mobileY = startY + 36 + addressHeight + 15;
 
   doc.font('Helvetica-Bold')
      .fontSize(9)
@@ -219,7 +224,7 @@ const drawHeader = (doc, shop, sale, title) => {
      );
 
   // ── TITLE ──
-  const titleY = mobileY + 16;   // ✅ mobile ke baad same 18px gap (address top gap ke barabar)
+  const titleY = mobileY + 16;
 
   doc.font('Helvetica-Bold')
      .fontSize(14)
@@ -238,7 +243,7 @@ const drawHeader = (doc, shop, sale, title) => {
      .lineWidth(1)
      .stroke();
 
-  return dividerY + 14; // ✅ dynamic — adjusts if address wraps to 2 lines
+  return dividerY + 14;
 };
 
 
@@ -289,35 +294,31 @@ const drawBillingBlock = (doc, sale, shop, y) => {
 
   const cardHeight = 78;
 
-  doc.roundedRect(leftX, startY, 260, cardHeight, 6)
-     .fillAndStroke('#FAFAFA', C.border);
-
+  // LEFT: Bill To — no box, just content
   doc.font('Helvetica-Bold').fontSize(7).fillColor(C.gold)
-     .text('BILL TO', leftX + 12, startY + 10, { characterSpacing: 1.5 });
+     .text('BILL TO', leftX, startY + 10, { characterSpacing: 1.5 });
 
   doc.font('Helvetica-Bold').fontSize(14).fillColor(C.ink)
-     .text(customer.name || '-', leftX + 12, startY + 24);
+     .text(customer.name || '-', leftX, startY + 24);
 
   let detailY = startY + 45;
 
   if (customer.phone) {
     doc.font('Helvetica').fontSize(8.5).fillColor(C.muted)
-       .text(`${customer.phone}`, leftX + 12, detailY);
+       .text(`${customer.phone}`, leftX, detailY);
     detailY += 13;
   }
 
   if (customer.address) {
     doc.font('Helvetica').fontSize(8.5).fillColor(C.muted)
-       .text(customer.address, leftX + 12, detailY, { width: 230 });
+       .text(customer.address, leftX, detailY, { width: 230 });
   }
 
   const infoWidth = 190;
 
-  doc.roundedRect(rightX, startY, infoWidth, cardHeight, 6)
-     .fillAndStroke('#FAFAFA', C.border);
-
+  // RIGHT: Invoice Details — no box, just content
   doc.font('Helvetica-Bold').fontSize(7).fillColor(C.gold)
-     .text('INVOICE DETAILS', rightX + 12, startY + 10, { characterSpacing: 1.5 });
+     .text('INVOICE DETAILS', rightX, startY + 10, { characterSpacing: 1.5 });
 
   const rows = [
     ['Invoice No.', sale.invoiceNumber],
@@ -329,11 +330,11 @@ const drawBillingBlock = (doc, sale, shop, y) => {
 
   rows.forEach(([label, value]) => {
     doc.font('Helvetica').fontSize(8).fillColor(C.muted)
-       .text(label, rightX + 12, rowY);
+       .text(label, rightX, rowY);
     doc.font('Helvetica-Bold').fontSize(8).fillColor(C.ink)
        .text(value || '-', rightX + 85, rowY, { width: 90, align: 'right' });
     rowY += 14;
-    doc.moveTo(rightX + 12, rowY - 3)
+    doc.moveTo(rightX, rowY - 3)
        .lineTo(rightX + infoWidth - 12, rowY - 3)
        .lineWidth(0.25).stroke('#EAEAEA');
   });
@@ -367,31 +368,31 @@ const drawItemsTable = (doc, sale, y) => {
 
   // ── TABLE HEADER ─────────────────────────────────
   const HEADER_H = 34;
-  const ITEM_HEADER_PADDING = 8;
+  const ITEM_HEADER_PADDING = 6;
 
   doc.rect(PAGE.margin, y, PAGE.inner, HEADER_H).fill('#1E3A8A');
 
   const hY = y + 12;
 
-  doc.font('Helvetica-Bold').fontSize(8).fillColor('#FFFFFF');
-
-  const ITEM_PADDING = 10;
+  doc.font('Helvetica-Bold').fontSize(7.5).fillColor('#FFFFFF');
 
   const headers = [
-    ['ITEM',   COL.item,   COL_W.item,   'left'],
-    ['KARAT',  COL.karat,  COL_W.karat,  'center'],
-    ['GROSS',  COL.gross,  COL_W.gross,  'right'],
-    ['NET',    COL.net,    COL_W.net,    'right'],
-    ['RATE',   COL.rate,   COL_W.rate,   'right'],
-    ['HUID',   COL.huid,   COL_W.huid,   'center'],
-    ['HSN',    COL.hsn,    COL_W.hsn,    'center'],
-    ['MAKING', COL.making, COL_W.making, 'right'],
-    ['TOTAL',  COL.total,  COL_W.total,  'right'],
+    ['ITEM',    COL.item,   COL_W.item,   'left'],
+    ['KARAT',      COL.karat,  COL_W.karat,  'center'],
+    ['GROSS',   COL.gross,  COL_W.gross,  'right'],
+    ['NET',     COL.net,    COL_W.net,    'right'],
+    ['ST.WT',   COL.stone,  COL_W.stone,  'right'],
+    ['ST.CHG',  COL.stoneC, COL_W.stoneC, 'right'],
+    ['RATE',    COL.rate,   COL_W.rate,   'right'],
+    ['HUID',    COL.huid,   COL_W.huid,   'center'],
+    ['HSN',     COL.hsn,    COL_W.hsn,    'center'],
+    ['MAKING',  COL.making, COL_W.making, 'right'],
+    ['TOTAL',   COL.total,  COL_W.total,  'right'],
   ];
 
   headers.forEach(([label, x, w, align]) => {
     const posX = label === 'ITEM' ? x + ITEM_HEADER_PADDING : x;
-    doc.text(label, posX, hY, { width: w, align, characterSpacing: 0.5 });
+    doc.text(label, posX, hY, { width: w, align, characterSpacing: 0.3 });
   });
 
   y += HEADER_H;
@@ -417,8 +418,8 @@ const drawItemsTable = (doc, sale, y) => {
 
     // ITEM NAME
     doc.fontSize(9).fillColor(C.ink).font('Helvetica-Bold')
-       .text(item.itemName || '-', COL.item + ITEM_PADDING, textY, {
-         width: COL_W.item - ITEM_PADDING,
+       .text(item.itemName || '-', COL.item + ITEM_HEADER_PADDING, textY, {
+         width: COL_W.item - ITEM_HEADER_PADDING,
          lineBreak: false,
        });
 
@@ -426,14 +427,14 @@ const drawItemsTable = (doc, sale, y) => {
     doc.fontSize(6.5)
        .fillColor(isGold ? '#B7791F' : '#4A5568')
        .font('Helvetica-Bold')
-       .text(isGold ? 'GOLD' : 'SILVER', COL.item + ITEM_PADDING, y + 20);
+       .text(isGold ? 'GOLD' : 'SILVER', COL.item + ITEM_HEADER_PADDING, y + 20);
 
     // KARAT BADGE
     if (item.purity) {
-      doc.roundedRect(COL.karat + 4, y + 7, 30, 16, 3)
+      doc.roundedRect(COL.karat + 2, y + 7, 28, 16, 3)
          .fill(isGold ? C.goldLighter : '#E8EEF7');
       doc.fontSize(7).fillColor(isGold ? C.gold : '#445566').font('Helvetica-Bold')
-         .text(item.purity, COL.karat + 4, y + 11, { width: 30, align: 'center' });
+         .text(item.purity, COL.karat + 2, y + 11, { width: 28, align: 'center' });
     } else {
       doc.fontSize(8).fillColor(C.muted)
          .text('—', COL.karat, textY, { width: COL_W.karat, align: 'center' });
@@ -450,6 +451,20 @@ const drawItemsTable = (doc, sale, y) => {
       width: COL_W.net, align: 'right',
     });
 
+    // STONE WEIGHT
+    const stoneWeight = safeNum(item.stoneWeight);
+    doc.fontSize(8).fillColor(stoneWeight > 0 ? C.ink : C.muted).font('Helvetica')
+       .text(stoneWeight > 0 ? stoneWeight.toFixed(3) : '—', COL.stone, textY, {
+         width: COL_W.stone, align: 'right',
+       });
+
+    // STONE CHARGES
+    const stoneCharges = safeNum(item.stoneCharges);
+    doc.fontSize(8).fillColor(stoneCharges > 0 ? C.ink : C.muted).font('Helvetica')
+       .text(stoneCharges > 0 ? fmtAmt(stoneCharges) : '—', COL.stoneC, textY, {
+         width: COL_W.stoneC, align: 'right',
+       });
+
     // RATE
     doc.fontSize(7.5).fillColor(C.muted)
        .text(`Rs ${fmtAmt(itemRate)}`, COL.rate, textY, {
@@ -458,24 +473,24 @@ const drawItemsTable = (doc, sale, y) => {
 
     // HUID BADGE
     if (item.huid) {
-      doc.roundedRect(COL.huid + 2, y + 7, 46, 16, 3).fill('#EAF2FF');
-      doc.fontSize(7).fillColor('#1E40AF').font('Helvetica-Bold')
-         .text(String(item.huid), COL.huid + 2, y + 11, { width: 46, align: 'center' });
+      doc.roundedRect(COL.huid + 1, y + 7, 40, 16, 3).fill('#EAF2FF');
+      doc.fontSize(6.5).fillColor('#1E40AF').font('Helvetica-Bold')
+         .text(String(item.huid), COL.huid + 1, y + 11, { width: 40, align: 'center' });
     } else {
       doc.fontSize(8).fillColor(C.muted)
          .text('—', COL.huid, textY, { width: COL_W.huid, align: 'center' });
     }
 
     // HSN
-    doc.fontSize(8).fillColor(item.hsnCode ? C.ink : C.muted).font('Helvetica')
+    doc.fontSize(7.5).fillColor(item.hsnCode ? C.ink : C.muted).font('Helvetica')
        .text(item.hsnCode || '—', COL.hsn, textY, {
          width: COL_W.hsn, align: 'center',
        });
 
-    // ✅ MAKING CHARGES — gold (percent-based) AND silver (flat ₹)
+    // MAKING CHARGES
     if (item.makingCharges != null && safeNum(item.makingCharges) > 0) {
-      doc.fontSize(8.5).fillColor(C.ink).font('Helvetica')
-         .text(`Rs ${fmtAmt(item.makingCharges)}`, COL.making, textY, {
+      doc.fontSize(8).fillColor(C.ink).font('Helvetica')
+         .text(fmtAmt(item.makingCharges), COL.making, textY, {
            width: COL_W.making, align: 'right',
          });
     } else {
@@ -562,7 +577,6 @@ const drawGSTSummary = (doc, sale, y) => {
   if (safeNum(sale.discountAmount) > 0)
     rows.push(['Discount', `- Rs.${fmtAmt(sale.discountAmount)}`, C.warning]);
 
-  // ✅ Round off row
   if (safeNum(sale.roundOffAmount) !== 0) {
     const roundOff = safeNum(sale.roundOffAmount);
     rows.push([
@@ -624,7 +638,6 @@ const drawSimpleSummary = (doc, sale, y) => {
     y += 15;
   }
 
-  // ✅ Round off row for non-GST invoice too
   if (safeNum(sale.roundOffAmount) !== 0) {
     const roundOff = safeNum(sale.roundOffAmount);
     doc.fontSize(8.5).fillColor(C.muted).font('Helvetica').text('Round Off', sX, y, { width: 100 });
