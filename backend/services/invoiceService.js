@@ -27,7 +27,7 @@ const C = {
   white:       '#FFFFFF',
 };
 
-const FOOTER_SPACE = 60;
+const FOOTER_SPACE = 30;
 
 const PAGE = {
   width:   595,
@@ -287,38 +287,36 @@ const drawRateStrip = (doc, sale, shop, y, showGstin) => {
 
 // ── BILLING BLOCK ────────────────────────────────
 const drawBillingBlock = (doc, sale, shop, y) => {
-  const startY   = y + 14;
+  const startY   = y + 8;        // was 14
   const customer = sale.customer;
   const leftX    = PAGE.margin;
   const rightX   = 355;
 
-  const cardHeight = 78;
+  const cardHeight = 55;         // was 78
 
-  // LEFT: Bill To — no box, just content
+  // LEFT: Bill To
   doc.font('Helvetica-Bold').fontSize(7).fillColor(C.gold)
-     .text('BILL TO', leftX, startY + 10, { characterSpacing: 1.5 });
+     .text('BILL TO', leftX, startY + 6, { characterSpacing: 1.5 });  // was +10
 
-  doc.font('Helvetica-Bold').fontSize(14).fillColor(C.ink)
-     .text(customer.name || '-', leftX, startY + 24);
+  doc.font('Helvetica-Bold').fontSize(12).fillColor(C.ink)            // was 14
+     .text(customer.name || '-', leftX, startY + 17);                 // was +24
 
-  let detailY = startY + 45;
+  let detailY = startY + 32;     // was +45
 
   if (customer.phone) {
-    doc.font('Helvetica').fontSize(8.5).fillColor(C.muted)
+    doc.font('Helvetica').fontSize(8).fillColor(C.muted)              // was 8.5
        .text(`${customer.phone}`, leftX, detailY);
-    detailY += 13;
+    detailY += 11;               // was 13
   }
 
   if (customer.address) {
-    doc.font('Helvetica').fontSize(8.5).fillColor(C.muted)
+    doc.font('Helvetica').fontSize(8).fillColor(C.muted)              // was 8.5
        .text(customer.address, leftX, detailY, { width: 230 });
   }
 
-  const infoWidth = 190;
-
-  // RIGHT: Invoice Details — no box, just content
+  // RIGHT: Invoice Details
   doc.font('Helvetica-Bold').fontSize(7).fillColor(C.gold)
-     .text('INVOICE DETAILS', rightX, startY + 10, { characterSpacing: 1.5 });
+     .text('INVOICE DETAILS', rightX, startY + 6, { characterSpacing: 1.5 });  // was +10
 
   const rows = [
     ['Invoice No.', sale.invoiceNumber],
@@ -326,26 +324,24 @@ const drawBillingBlock = (doc, sale, shop, y) => {
     ['Time',        formatTime(sale.saleDate)],
   ];
 
-  let rowY = startY + 26;
+  let rowY = startY + 18;        // was +26
 
   rows.forEach(([label, value]) => {
     doc.font('Helvetica').fontSize(8).fillColor(C.muted)
        .text(label, rightX, rowY);
     doc.font('Helvetica-Bold').fontSize(8).fillColor(C.ink)
        .text(value || '-', rightX + 85, rowY, { width: 90, align: 'right' });
-    rowY += 14;
-   
+    rowY += 12;                  // was 14
   });
 
-  const endY = startY + cardHeight + 18;
+  const endY = startY + cardHeight + 10;  // was +18
 
   doc.moveTo(PAGE.margin, endY)
      .lineTo(PAGE.width - PAGE.margin, endY)
      .lineWidth(0.6).stroke(C.border);
 
-  return endY + 12;
+  return endY + 8;               // was +12
 };
-
 
 // ── ITEMS TABLE ───────────────────────────────────
 const drawItemsTable = (doc, sale, y) => {
