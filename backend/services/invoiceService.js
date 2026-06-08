@@ -584,7 +584,7 @@ const drawItemsTable = (doc, sale, y) => {
 
     // Section label
     doc.fontSize(7.5).fillColor(C.gold).font('Helvetica-Bold')
-       .text('TOTAL METAL PURCHASED', PAGE.margin, y, { characterSpacing: 1.5 });
+       .text('TOTAL ITEM PURCHASED', PAGE.margin, y, { characterSpacing: 1.5 });
 
     y += 11;
 
