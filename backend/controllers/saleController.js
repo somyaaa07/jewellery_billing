@@ -19,6 +19,11 @@ const validateItemByMetalType = (item, idx) => {
     return `Item ${idx + 1}: grossWeight required hai`;
   }
 
+  // ✅ Per-item rate validation (replaces global goldRate / silverRate)
+  if (!item.rate || parseFloat(item.rate) <= 0) {
+    return `Item ${idx + 1}: rate required hai`;
+  }
+
   if (metalType === 'gold') {
     if (!item.purity || !String(item.purity).trim()) {
       return `Item ${idx + 1}: Gold ke liye purity required hai`;
@@ -53,14 +58,16 @@ export const createSale = async (req, res) => {
     const {
       customerId,
       items,
-      goldRate,
-      silverRate,
       isGst,
       exchangeItems,
       paidAmount,
       paymentMode,
       notes,
     } = req.body;
+
+    // goldRate / silverRate are now optional / legacy — per-item rate used instead
+    const goldRate   = req.body.goldRate   || 0;
+    const silverRate = req.body.silverRate || 0;
 
     const advanceUsed     = parseFloat(req.body.advanceUsedAmount     || 0);
     const advanceReceived = parseFloat(req.body.advanceReceivedAmount || 0);
@@ -86,20 +93,7 @@ export const createSale = async (req, res) => {
       return res.status(400).json({ success: false, message: 'customerId required hai' });
     }
 
-    const hasGoldItems   = items.some(it => (it.metalType || 'gold').toLowerCase() === 'gold');
-    const hasSilverItems = items.some(it => (it.metalType || 'gold').toLowerCase() === 'silver');
-
-    if (hasGoldItems && !goldRate) {
-      await t.rollback();
-      return res.status(400).json({ success: false, message: 'goldRate required hai' });
-    }
-
-    if (hasSilverItems && !silverRate) {
-      await t.rollback();
-      return res.status(400).json({ success: false, message: 'silverRate required hai' });
-    }
-
-    // ── Per-item validation ──
+    // ── Per-item validation (rate check is now inside validateItemByMetalType) ──
     for (let i = 0; i < items.length; i++) {
       const err = validateItemByMetalType(items[i], i);
       if (err) {
@@ -121,11 +115,11 @@ export const createSale = async (req, res) => {
     // ── Items Calculate ──
     let subtotal = 0;
     const processedItems = items.map(item => {
-      const metalType  = (item.metalType || 'gold').toLowerCase();
-      const netWeight  = Math.max(0, parseFloat(item.grossWeight || 0) - parseFloat(item.stoneWeight || 0));
-      const activeRate = metalType === 'gold'
-        ? parseFloat(goldRate   || 0)
-        : parseFloat(silverRate || 0);
+      const metalType = (item.metalType || 'gold').toLowerCase();
+      const netWeight = Math.max(0, parseFloat(item.grossWeight || 0) - parseFloat(item.stoneWeight || 0));
+
+      // ✅ Per-item rate — sent directly from billing form
+      const activeRate = parseFloat(item.rate || 0);
 
       const metalValue   = netWeight * activeRate;
       const stoneCharges = parseFloat(item.stoneCharges || 0);
@@ -193,8 +187,8 @@ export const createSale = async (req, res) => {
     const totalBeforeRound = parseFloat(
       (subtotal + cgstAmount + sgstAmount - totalExchangeValue).toFixed(2)
     );
-    const totalAmount    = Math.round(totalBeforeRound);                          // ✅ rounded to nearest ₹
-    const roundOffAmount = parseFloat((totalAmount - totalBeforeRound).toFixed(2)); // ✅ +/- difference
+    const totalAmount    = Math.round(totalBeforeRound);
+    const roundOffAmount = parseFloat((totalAmount - totalBeforeRound).toFixed(2));
 
     console.log('totalBeforeRound:', totalBeforeRound);
     console.log('totalAmount (rounded):', totalAmount);
@@ -228,7 +222,7 @@ export const createSale = async (req, res) => {
         sgstAmount,
         exchangeValue:  parseFloat(totalExchangeValue.toFixed(2)),
         discountAmount: 0,
-        roundOffAmount,   // ✅ new field
+        roundOffAmount,
         totalAmount,
         paidAmount:     totalPaid,
         dueAmount:      due,

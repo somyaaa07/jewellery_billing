@@ -101,16 +101,26 @@ export default function InvoiceView() {
     } catch (err) { console.error(err); alert('Email failed'); }
   };
 
-  const hasHuid        = (sale.items || []).some(it => it.huid);
-  const hasHsn         = (sale.items || []).some(it => it.hsnCode);
-  const hasGoldItem    = (sale.items || []).some(it => (it.metalType || 'gold') === 'gold');
-  const hasSilverItem  = (sale.items || []).some(it => it.metalType === 'silver');
+  const hasHuid       = (sale.items || []).some(it => it.huid);
+  const hasHsn        = (sale.items || []).some(it => it.hsnCode);
+  const advanceUsed   = parseFloat(sale.advanceUsed || 0);
+  const cashPaid      = parseFloat(sale.paidAmount  || 0) - advanceUsed;
 
-  // ── Advance used in this sale ──
-  const advanceUsed = parseFloat(sale.advanceUsed || 0);
-
-  // Cash paid = paidAmount - advanceUsed
-  const cashPaid = parseFloat(sale.paidAmount || 0) - advanceUsed;
+  // ── Build per-item rate summary grouped by metal + purity ──
+  // e.g. { "gold-22K": 7250, "gold-18K": 6100, "silver": 90 }
+  const rateGroups = {};
+  (sale.items || []).forEach(it => {
+    const metal  = (it.metalType || 'gold').toLowerCase();
+    const rate   = parseFloat(it.rate || 0);
+    if (!rate) return;
+    if (metal === 'gold') {
+      const key = `gold-${it.purity || '22K'}`;
+      if (!rateGroups[key]) rateGroups[key] = { metal: 'gold', purity: it.purity || '22K', rate };
+    } else {
+      if (!rateGroups['silver']) rateGroups['silver'] = { metal: 'silver', purity: null, rate };
+    }
+  });
+  const rateEntries = Object.values(rateGroups);
 
   return (
     <div className="max-w-3xl mx-auto space-y-4">
@@ -121,11 +131,9 @@ export default function InvoiceView() {
           <ArrowLeft size={15} /> Back
         </Link>
         <div className="flex-1" />
-
         <button onClick={handlePrintPdf} className="btn-secondary">
           <Printer size={15} /> Print
         </button>
-
         <button
           onClick={handleEmail}
           className="p-1.5 rounded-lg hover:bg-blue-50 text-blue-500 transition-colors"
@@ -134,7 +142,6 @@ export default function InvoiceView() {
           <Mail size={15} />
           {emailSent && <span className="text-xs ml-1 text-blue-500">Sent!</span>}
         </button>
-
         <button
           onClick={handleWhatsApp}
           className="p-1.5 rounded-lg hover:bg-green-50 text-green-500 transition-colors"
@@ -142,7 +149,6 @@ export default function InvoiceView() {
         >
           <MessageCircle size={15} />
         </button>
-
         <button
           onClick={handleDownload}
           className="p-1.5 rounded-lg hover:bg-green-50 text-green-500 transition-colors"
@@ -176,16 +182,15 @@ export default function InvoiceView() {
               </p>
               <p className="text-lg font-bold mt-1">{sale.invoiceNumber}</p>
               <p className="text-white/60 text-xs mt-1">{fmtDate(sale.saleDate)}</p>
-              {hasGoldItem && (
-                <p className="text-white/60 text-xs">
-                  Gold Rate: ₹{parseFloat(sale.goldRate || 0).toLocaleString('en-IN')}/g
+              {/* Per-item rates in header */}
+              {rateEntries.map((r, i) => (
+                <p key={i} className="text-white/60 text-xs">
+                  {r.metal === 'gold'
+                    ? `Gold ${r.purity} Rate: ₹${parseFloat(r.rate).toLocaleString('en-IN')}/g`
+                    : `Silver Rate: ₹${parseFloat(r.rate).toLocaleString('en-IN')}/g`
+                  }
                 </p>
-              )}
-              {hasSilverItem && sale.silverRate && parseFloat(sale.silverRate) > 0 && (
-                <p className="text-white/60 text-xs">
-                  Silver Rate: ₹{parseFloat(sale.silverRate).toLocaleString('en-IN')}/g
-                </p>
-              )}
+              ))}
             </div>
           </div>
         </div>
@@ -200,25 +205,37 @@ export default function InvoiceView() {
             {c.address && <p className="text-sm text-gray-500">{c.address}</p>}
           </div>
 
-          {/* Rate Summary strip */}
-          {(hasGoldItem || hasSilverItem) && (
-            <div className="flex gap-4 bg-amber-50 rounded-xl px-4 py-2.5 border border-amber-100">
-              {hasGoldItem && (
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xs text-amber-600 font-medium">Gold Rate:</span>
-                  <span className="text-xs font-bold text-amber-800">
-                    ₹{parseFloat(sale.goldRate || 0).toLocaleString('en-IN')}/g
-                  </span>
+          {/* Rate Summary strip — per item grouped by metal + karat */}
+          {rateEntries.length > 0 && (
+            <div className="flex flex-wrap gap-2 bg-amber-50 rounded-xl px-4 py-2.5 border border-amber-100">
+              {rateEntries.map((r, i) => (
+                <div key={i} className="flex items-center gap-1.5">
+                  {r.metal === 'gold' ? (
+                    <>
+                      <span className="text-xs bg-yellow-200 text-yellow-800 font-bold px-1.5 py-0.5 rounded-full">
+                        {r.purity}
+                      </span>
+                      <span className="text-xs text-amber-600 font-medium">Gold Rate:</span>
+                      <span className="text-xs font-bold text-amber-800">
+                        ₹{parseFloat(r.rate).toLocaleString('en-IN')}/g
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-xs bg-gray-200 text-gray-700 font-bold px-1.5 py-0.5 rounded-full">
+                        Silver
+                      </span>
+                      <span className="text-xs text-gray-500 font-medium">Rate:</span>
+                      <span className="text-xs font-bold text-gray-700">
+                        ₹{parseFloat(r.rate).toLocaleString('en-IN')}/g
+                      </span>
+                    </>
+                  )}
+                  {i < rateEntries.length - 1 && (
+                    <span className="text-amber-300 ml-1">|</span>
+                  )}
                 </div>
-              )}
-              {hasSilverItem && sale.silverRate && parseFloat(sale.silverRate) > 0 && (
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xs text-gray-500 font-medium"> Silver Rate:</span>
-                  <span className="text-xs font-bold text-gray-700">
-                    ₹{parseFloat(sale.silverRate).toLocaleString('en-IN')}/g
-                  </span>
-                </div>
-              )}
+              ))}
             </div>
           )}
 
@@ -244,16 +261,13 @@ export default function InvoiceView() {
               <tbody>
                 {(sale.items || []).map((it, i) => {
                   const isGold     = (it.metalType || 'gold') === 'gold';
-                  const metalLabel = isGold ? ' Gold' : ' Silver';
+                  const metalLabel = isGold ? 'Gold' : 'Silver';
                   const metalCls   = isGold
                     ? 'bg-yellow-100 text-yellow-800'
                     : 'bg-gray-100 text-gray-600';
 
-                  const itemRate = it.rate
-                    ? parseFloat(it.rate)
-                    : isGold
-                      ? parseFloat(sale.goldRate   || 0)
-                      : parseFloat(sale.silverRate || 0);
+                  // Always use per-item rate stored on the item
+                  const itemRate = parseFloat(it.rate || 0);
 
                   return (
                     <tr key={i} className="border-b border-gray-50">
@@ -305,7 +319,7 @@ export default function InvoiceView() {
               {sale.exchangeItems.map((ex, i) => (
                 <div key={i} className="flex justify-between text-sm">
                   <span className="text-green-700">
-                    {ex.itemDescription}  — {fmtWt(ex.grossWeight)} @ ₹{ex.exchangeRate}/g
+                    {ex.itemDescription} — {fmtWt(ex.grossWeight)} @ ₹{ex.exchangeRate}/g
                   </span>
                   <span className="font-semibold text-green-700">−{fmtINR(ex.exchangeValue)}</span>
                 </div>
@@ -344,7 +358,6 @@ export default function InvoiceView() {
                 <span>{fmtINR(sale.totalAmount)}</span>
               </div>
 
-              {/* ── Payment Breakdown ── */}
               {cashPaid > 0 && (
                 <div className="flex justify-between text-green-600 font-medium">
                   <span>Cash / UPI Paid</span>
@@ -362,7 +375,6 @@ export default function InvoiceView() {
                 </div>
               )}
 
-              {/* Total Paid row (only if both cash + advance) */}
               {advanceUsed > 0 && cashPaid > 0 && (
                 <div className="flex justify-between font-semibold text-green-600 border-t border-gray-100 pt-1.5">
                   <span>Total Paid</span>
@@ -370,7 +382,6 @@ export default function InvoiceView() {
                 </div>
               )}
 
-              {/* If only advance, single "Paid" row */}
               {advanceUsed > 0 && cashPaid <= 0 && (
                 <div className="flex justify-between font-semibold text-green-600">
                   <span>Paid (via Advance)</span>
@@ -378,7 +389,6 @@ export default function InvoiceView() {
                 </div>
               )}
 
-              {/* If only cash, single "Paid" row */}
               {advanceUsed <= 0 && (
                 <div className="flex justify-between text-green-600 font-medium">
                   <span>Paid</span>

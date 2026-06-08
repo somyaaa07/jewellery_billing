@@ -248,27 +248,60 @@ const drawHeader = (doc, shop, sale, title) => {
 
 
 // ── RATE STRIP ────────────────────────────────────
+// ── RATE STRIP ────────────────────────────────────
 const drawRateStrip = (doc, sale, shop, y, showGstin) => {
-  const hasSilver = sale.silverRate && safeNum(sale.silverRate) > 0;
-  const hasGold   = sale.goldRate   && safeNum(sale.goldRate)   > 0;
   const H = 22;
+
+  // ── Build per-karat rate groups (mirrors InvoiceView.jsx logic) ──
+  const rateGroups = {};
+  (sale.items || []).forEach(it => {
+    const metal = (it.metalType || 'gold').toLowerCase();
+    const rate  = safeNum(it.rate);
+    if (!rate) return;
+    if (metal === 'gold') {
+      const key = `gold-${it.purity || '22K'}`;
+      if (!rateGroups[key]) rateGroups[key] = { metal: 'gold', purity: it.purity || '22K', rate };
+    } else {
+      if (!rateGroups['silver']) rateGroups['silver'] = { metal: 'silver', purity: null, rate };
+    }
+  });
+
+  // Fallback to sale-level rates if no per-item rates found
+  if (Object.keys(rateGroups).length === 0) {
+    if (safeNum(sale.goldRate) > 0)
+      rateGroups['gold-22K'] = { metal: 'gold', purity: '22K', rate: safeNum(sale.goldRate) };
+    if (safeNum(sale.silverRate) > 0)
+      rateGroups['silver'] = { metal: 'silver', purity: null, rate: safeNum(sale.silverRate) };
+  }
+
+  const rateEntries = Object.values(rateGroups);
 
   doc.rect(PAGE.margin, y, PAGE.inner, H).fill(C.goldLighter);
 
   let textX = PAGE.margin + 12;
 
-  if (hasGold) {
-    doc.fontSize(8).fillColor(C.muted).font('Helvetica').text('Gold Rate', textX, y + 7);
-    doc.fontSize(9).fillColor(C.ink).font('Helvetica-Bold')
-       .text(`Rs.${fmtAmt(sale.goldRate)}/g`, textX + 52, y + 6);
-    textX += 130;
-  }
+  rateEntries.forEach((r, i) => {
+    if (r.metal === 'gold') {
+      const label = `Gold ${r.purity} Rate`;
+      doc.fontSize(8).fillColor(C.muted).font('Helvetica')
+         .text(label, textX, y + 7);
+      doc.fontSize(9).fillColor(C.ink).font('Helvetica-Bold')
+         .text(`Rs.${fmtAmt(r.rate)}/g`, textX + doc.widthOfString(label) + 4, y + 6);
+      textX += doc.widthOfString(label) + doc.widthOfString(`Rs.${fmtAmt(r.rate)}/g`) + 20;
+    } else {
+      doc.fontSize(8).fillColor(C.muted).font('Helvetica')
+         .text('Silver Rate', textX, y + 7);
+      doc.fontSize(9).fillColor(C.ink).font('Helvetica-Bold')
+         .text(`Rs.${fmtAmt(r.rate)}/g`, textX + 58, y + 6);
+      textX += 130;
+    }
 
-  if (hasSilver) {
-    doc.fontSize(8).fillColor(C.muted).font('Helvetica').text('Silver Rate', textX, y + 7);
-    doc.fontSize(9).fillColor(C.ink).font('Helvetica-Bold')
-       .text(`Rs.${fmtAmt(sale.silverRate)}/g`, textX + 55, y + 6);
-  }
+    // Separator between entries
+    if (i < rateEntries.length - 1) {
+      doc.moveTo(textX - 10, y + 5).lineTo(textX - 10, y + H - 5)
+         .lineWidth(0.5).stroke(C.border);
+    }
+  });
 
   if (showGstin && shop.gstin) {
     const badgeW = 155;
@@ -372,7 +405,7 @@ const drawItemsTable = (doc, sale, y) => {
 
   const headers = [
     ['ITEM',    COL.item,   COL_W.item,   'left'],
-    ['KARAT',      COL.karat,  COL_W.karat,  'center'],
+    ['KARAT',   COL.karat,  COL_W.karat,  'center'],
     ['GROSS',   COL.gross,  COL_W.gross,  'right'],
     ['NET',     COL.net,    COL_W.net,    'right'],
     ['ST.WT',   COL.stone,  COL_W.stone,  'right'],
@@ -401,7 +434,7 @@ const drawItemsTable = (doc, sale, y) => {
     const bg = idx % 2 === 0 ? '#FFFFFF' : '#F6F8FC';
     doc.rect(PAGE.margin, y, PAGE.inner, ROW_H).fill(bg);
 
-    const textY = y + 9;
+    const textY  = y + 9;
     const isGold = !item.metalType || item.metalType === 'gold';
 
     const itemRate = safeNum(item.rate) > 0
@@ -507,14 +540,101 @@ const drawItemsTable = (doc, sale, y) => {
     y += ROW_H;
   });
 
+  // ── BOTTOM GOLD DIVIDER ───────────────────────────
   doc.moveTo(PAGE.margin, y + 2)
      .lineTo(PAGE.width - PAGE.margin, y + 2)
      .lineWidth(1).stroke(C.gold);
 
-  doc.restore();
-  return y + 14;
-};
+  y += 10;
 
+  // ── TOTAL METAL PURCHASED SUMMARY ─────────────────
+ 
+    // ── TOTAL METAL PURCHASED SUMMARY ─────────────────
+  const metalGroups = {};
+  items.forEach(it => {
+    const metal = (it.metalType || 'gold').toLowerCase();
+    const gross = safeNum(it.grossWeight);
+
+    if (metal === 'gold') {
+      if (!metalGroups['gold']) {
+        metalGroups['gold'] = {
+          label:      'Gold',
+          isGold:     true,
+          totalGross: 0,
+        };
+      }
+      metalGroups['gold'].totalGross += gross;
+    } else {
+      if (!metalGroups['silver']) {
+        metalGroups['silver'] = {
+          label:      'Silver',
+          isGold:     false,
+          totalGross: 0,
+        };
+      }
+      metalGroups['silver'].totalGross += gross;
+    }
+  });
+
+  const summaryEntries = Object.values(metalGroups);
+
+  if (summaryEntries.length > 0) {
+    const STRIP_H = 24;
+    y = checkPageBreak(doc, y, STRIP_H + 16);
+
+    // Section label
+    doc.fontSize(7.5).fillColor(C.gold).font('Helvetica-Bold')
+       .text('TOTAL METAL PURCHASED', PAGE.margin, y, { characterSpacing: 1.5 });
+
+    y += 11;
+
+    // Full-width background strip
+    doc.rect(PAGE.margin, y, PAGE.inner, STRIP_H).fill(C.goldLighter);
+    doc.rect(PAGE.margin, y, 3, STRIP_H).fill(C.gold);
+
+    let curX = PAGE.margin + 14;
+
+    summaryEntries.forEach((g, i) => {
+      const isGold   = g.isGold;
+      const badgeBg  = isGold ? C.goldLight : '#DCE8F5';
+      const badgeClr = isGold ? C.gold      : C.navy;
+      const valClr   = isGold ? C.gold      : C.navy;
+
+      // Vertical separator between entries
+      if (i > 0) {
+        doc.moveTo(curX - 8, y + 5)
+           .lineTo(curX - 8, y + STRIP_H - 5)
+           .lineWidth(0.5).stroke(C.border);
+      }
+
+      // Metal badge
+      const badgeW = isGold ? 52 : 42;
+      doc.roundedRect(curX, y + 5, badgeW, 14, 3).fill(badgeBg);
+      doc.fontSize(7).fillColor(badgeClr).font('Helvetica-Bold')
+         .text(g.label.toUpperCase(), curX, y + 9, { width: badgeW, align: 'center' });
+
+      curX += badgeW + 6;
+
+      // Gross weight
+      doc.fontSize(6.5).fillColor(C.muted).font('Helvetica')
+         .text('Gross Wt:', curX, y + 6);
+      doc.fontSize(8.5).fillColor(valClr).font('Helvetica-Bold')
+         .text(`${g.totalGross.toFixed(3)} g`, curX, y + 14);
+
+      curX += 62;
+    });
+
+    // Bottom border
+    doc.moveTo(PAGE.margin, y + STRIP_H)
+       .lineTo(PAGE.width - PAGE.margin, y + STRIP_H)
+       .lineWidth(0.6).stroke(C.border);
+
+    y += STRIP_H + 10;
+  }
+
+  doc.restore();
+  return y + 6;
+};
 
 // ── EXCHANGE SECTION ──────────────────────────────
 const drawExchangeSection = (doc, exchangeItems, y) => {

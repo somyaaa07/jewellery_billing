@@ -18,6 +18,7 @@ const EMPTY_ITEM = {
   purity:       '22K',
   huid:         '',
   hsnCode:      '',
+  rate:         '',   // ← per-item rate
 };
 
 const EMPTY_EX = { itemDescription:'Old Gold', grossWeight:'', purity:'22K', exchangeRate:'' };
@@ -32,8 +33,6 @@ export default function Billing() {
 
   const [customers,   setCustomers]   = useState([]);
   const [customerId,  setCustomerId]  = useState('');
-  const [goldRate,    setGoldRate]    = useState('');
-  const [silverRate,  setSilverRate]  = useState('');
   const [isGst,       setIsGst]       = useState(false);
   const [items,       setItems]       = useState([{ ...EMPTY_ITEM }]);
   const [exItems,     setExItems]     = useState([]);
@@ -60,16 +59,13 @@ export default function Billing() {
   const [advSaved,  setAdvSaved]  = useState(false);
   const [advError,  setAdvError]  = useState('');
 
-  const hasSilverItem = items.some(it => (it.metalType || 'gold') === 'silver');
-  const hasGoldItem   = items.some(it => (it.metalType || 'gold') === 'gold');
-
   useEffect(() => {
     customerAPI.getAll({ limit: 200 })
       .then(r => setCustomers(r.data.data || []))
       .catch(console.error);
   }, []);
 
-  // ── Jab customer change ho tab advance balance fetch karo ──
+  // ── Customer change hone par advance balance fetch karo ──
   useEffect(() => {
     setAdvanceBalance(0);
     setAdvanceList([]);
@@ -99,7 +95,8 @@ export default function Billing() {
     const defaultHsn    = DEFAULT_HSN[metalType] || '';
     setItems(p => p.map((it, idx) =>
       idx === i
-        ? { ...it, metalType, purity: defaultPurity, hsnCode: defaultHsn, makingCharges: '', huid: '' }
+        ? { ...it, metalType, purity: defaultPurity, hsnCode: defaultHsn,
+            makingCharges: '', huid: '', rate: '' }   // ← rate reset
         : it
     ));
   };
@@ -112,10 +109,9 @@ export default function Billing() {
   const addEx    = () => setExItems(p => [...p, { ...EMPTY_EX }]);
   const removeEx = (i) => setExItems(p => p.filter((_, idx) => idx !== i));
 
+  // ── goldRate / silverRate HATA DIYE — calcBill ab item.rate use karta hai ──
   const summary = calcBill({
     items,
-    goldRate,
-    silverRate,
     isGst,
     exchangeItems: exItems,
     paid: paidAmount,
@@ -133,8 +129,6 @@ export default function Billing() {
   // ── Save Bill ──
   const handleSave = async () => {
     if (!customerId) return setError('Customer select karo');
-    if (hasGoldItem   && !goldRate)   return setError('Enter Gold Rate');
-    if (hasSilverItem && !silverRate) return setError('Enter Silver Rate');
 
     for (let i = 0; i < items.length; i++) {
       const it        = items[i];
@@ -145,9 +139,10 @@ export default function Billing() {
         return setError(`Item ${idx}: Item name required hai`);
       if (!it.grossWeight || parseFloat(it.grossWeight) <= 0)
         return setError(`Item ${idx}: Gross weight required hai`);
+      if (!it.rate || parseFloat(it.rate) <= 0)
+        return setError(`Item ${idx}: Rate required hai`);
       if (metalType === 'gold' && !it.purity)
         return setError(`Item ${idx}: Gold ke liye purity required hai`);
-      // ✅ Silver: making charge (flat) required
       if (metalType === 'silver' && (it.makingCharges === '' || it.makingCharges === undefined))
         return setError(`Item ${idx}: Silver ke liye making charges required hai`);
     }
@@ -161,8 +156,6 @@ export default function Billing() {
 
       const payload = {
         customerId:        parseInt(customerId),
-        goldRate:          parseFloat(goldRate   || 0),
-        silverRate:        parseFloat(silverRate || 0),
         isGst,
         paidAmount:        parseFloat(paidAmount || 0),
         paymentMode:       payMode,
@@ -170,7 +163,6 @@ export default function Billing() {
         advanceUsedAmount:    parseFloat(advanceToUse.toFixed(2)),
         advanceReceivedAmount: 0,
 
-        // ✅ FIX: Gold → makingChargesPercent, Silver → makingCharges (flat ₹)
         items: items.map(it => {
           const metalType = (it.metalType || 'gold').toLowerCase();
           return {
@@ -179,13 +171,14 @@ export default function Billing() {
             grossWeight:  parseFloat(it.grossWeight  || 0),
             stoneWeight:  parseFloat(it.stoneWeight  || 0),
             stoneCharges: parseFloat(it.stoneCharges || 0),
+            rate:         parseFloat(it.rate         || 0),   // ← per-item rate
             purity:   metalType === 'gold' ? (it.purity || '22K') : null,
             huid:     it.huid    || null,
             hsnCode:  it.hsnCode || DEFAULT_HSN[metalType] || null,
             netWeight: calcNetWeight(it.grossWeight, it.stoneWeight),
             ...(metalType === 'silver'
-              ? { makingCharges: parseFloat(it.makingCharges || 0) }          // flat ₹
-              : { makingChargesPercent: parseFloat(it.makingCharges || 0) }   // percent
+              ? { makingCharges: parseFloat(it.makingCharges || 0) }
+              : { makingChargesPercent: parseFloat(it.makingCharges || 0) }
             ),
           };
         }),
@@ -262,12 +255,12 @@ export default function Billing() {
         </div>
       )}
 
-      {/* ── Row 1: Customer + Rates + GST ── */}
+      {/* ── Row 1: Customer + GST ── */}
       <div className="card">
         <h3 className="font-slab font-semibold text-[#050a30] text-sm mb-4">Bill Details</h3>
-        <div className="grid sm:grid-cols-4 gap-4">
+        <div className="grid sm:grid-cols-2 gap-4">
 
-          <div className="sm:col-span-2">
+          <div>
             <label className="font-slab block text-xs font-medium text-gray-600 mb-1.5">Customer *</label>
             <div className="flex gap-2">
               <Select
@@ -310,42 +303,22 @@ export default function Billing() {
             )}
           </div>
 
-          <div>
-            <label className="font-slab block text-xs font-medium text-gray-600 mb-1.5">
-              Gold Rate (₹/g){hasGoldItem ? ' *' : ''}
+          {/* GST Toggle */}
+          <div className="flex items-center">
+            <label className="flex items-center gap-2.5 cursor-pointer w-fit">
+              <div
+                onClick={() => setIsGst(g => !g)}
+                className={`w-11 h-6 rounded-full transition-colors duration-200 flex items-center px-0.5 cursor-pointer
+                  ${isGst ? 'bg-[#050a30]' : 'bg-gray-200'}`}
+              >
+                <div className={`w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 ${isGst ? 'translate-x-5' : 'translate-x-0'}`} />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-[#050a30]">{isGst ? 'GST Invoice' : 'Non-GST Invoice'}</p>
+                <p className="text-xs text-gray-400">{isGst ? 'CGST 1.5% + SGST 1.5%' : 'No tax'}</p>
+              </div>
             </label>
-            <input
-              className="input-field" type="number" placeholder="00"
-              value={goldRate} onChange={e => setGoldRate(e.target.value)}
-            />
           </div>
-
-          <div>
-            <label className="font-slab block text-xs font-medium text-gray-600 mb-1.5">
-              Silver Rate (₹/g){hasSilverItem ? ' *' : ''}
-            </label>
-            <input
-              className="input-field" type="number" placeholder="00"
-              value={silverRate} onChange={e => setSilverRate(e.target.value)}
-            />
-          </div>
-        </div>
-
-        {/* GST Toggle */}
-        <div className="mt-4">
-          <label className="flex items-center gap-2.5 cursor-pointer w-fit">
-            <div
-              onClick={() => setIsGst(g => !g)}
-              className={`w-11 h-6 rounded-full transition-colors duration-200 flex items-center px-0.5 cursor-pointer
-                ${isGst ? 'bg-[#050a30]' : 'bg-gray-200'}`}
-            >
-              <div className={`w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 ${isGst ? 'translate-x-5' : 'translate-x-0'}`} />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-[#050a30]">{isGst ? 'GST Invoice' : 'Non-GST Invoice'}</p>
-              <p className="text-xs text-gray-400">{isGst ? 'CGST 1.5% + SGST 1.5%' : 'No tax'}</p>
-            </div>
-          </label>
         </div>
       </div>
 
@@ -362,11 +335,10 @@ export default function Billing() {
           {items.map((it, i) => {
             const isGold     = (it.metalType || 'gold') === 'gold';
             const net        = calcNetWeight(it.grossWeight, it.stoneWeight);
-            const activeRate = isGold ? parseFloat(goldRate || 0) : parseFloat(silverRate || 0);
+            const activeRate = parseFloat(it.rate || 0);   // ← per-item rate
             const metalValue = net * activeRate;
             const makingRaw  = parseFloat(it.makingCharges || 0);
 
-            // ✅ FIX: Gold = percent of metalValue, Silver = flat ₹ amount
             const makingValue = isGold
               ? metalValue * (makingRaw / 100)
               : makingRaw;
@@ -379,6 +351,7 @@ export default function Billing() {
                 className={`rounded-xl border p-4 space-y-3 relative group
                   ${isGold ? 'border-yellow-200 bg-yellow-50/40' : 'border-gray-200 bg-gray-50/40'}`}
               >
+                {/* ── Metal toggle + item label ── */}
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <div className="flex rounded-lg overflow-hidden border border-gray-200 text-xs font-medium">
@@ -393,15 +366,11 @@ export default function Billing() {
                               : 'bg-white text-gray-500 hover:bg-gray-50'
                             }`}
                         >
-                          {mt === 'gold' ? ' Gold' : ' Silver'}
+                          {mt === 'gold' ? 'Gold' : 'Silver'}
                         </button>
                       ))}
                     </div>
                     <span className="text-xs text-gray-400">Item {i + 1}</span>
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium
-                      ${isGold ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-600'}`}>
-                      ₹{activeRate > 0 ? activeRate.toLocaleString('en-IN') : '—'}/g
-                    </span>
                   </div>
 
                   {items.length > 1 && (
@@ -411,8 +380,22 @@ export default function Billing() {
                   )}
                 </div>
 
+                {/* ── Row: Rate + Item Name + Karat + HSN ── */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  <div className="sm:col-span-2">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-1">
+                      {isGold ? 'Gold Rate (₹/g) *' : 'Silver Rate (₹/g) *'}
+                    </label>
+                    <input
+                      className="input-field text-xs py-1.5"
+                      type="number"
+                      placeholder={isGold ? '7250' : '85'}
+                      value={it.rate}
+                      onChange={e => updateItem(i, 'rate', e.target.value)}
+                    />
+                  </div>
+
+                  <div>
                     <label className="block text-xs font-medium text-gray-500 mb-1">Item Name *</label>
                     <input
                       className="input-field text-xs py-1.5"
@@ -446,6 +429,7 @@ export default function Billing() {
                   </div>
                 </div>
 
+                {/* ── Row: Weights ── */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   <div>
                     <label className="block text-xs font-medium text-gray-500 mb-1">Gross Weight (g) *</label>
@@ -482,9 +466,9 @@ export default function Billing() {
                   ) : <div />}
                 </div>
 
+                {/* ── Row: Making + Stone + Totals ── */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 items-end">
                   <div>
-                    {/* ✅ FIX: Label changes based on metal type */}
                     <label className="block text-xs font-medium text-gray-500 mb-1">
                       {isGold ? 'Making (%)' : 'Making (₹)'}
                     </label>
@@ -525,7 +509,7 @@ export default function Billing() {
         </div>
       </div>
 
-      {/* ── Row 3: Exchange Gold ── */}
+      {/* ── Row 3: Exchange Items ── */}
       <div className="card">
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-slab font-semibold text-[#050a30] text-sm">
@@ -571,24 +555,23 @@ export default function Billing() {
         <div className="card">
           <h3 className="font-slab font-semibold text-[#050a30] text-sm mb-4">Bill Summary</h3>
           <div className="space-y-2.5 text-sm">
-           {[
-  { label:'Subtotal', val: fmtINR(summary.subtotal) },
-  ...(isGst ? [
-    { label:'CGST @ 1.5%', val: fmtINR(summary.cgst) },
-    { label:'SGST @ 1.5%', val: fmtINR(summary.sgst) },
-  ] : []),
-  ...(summary.exchangeValue > 0 ? [
-    { label:'Exchange Deduction', val:`- ${fmtINR(summary.exchangeValue)}`, cls:'text-green-600' },
-  ] : []),
-  // ✅ Round off row — only show if non-zero
-  ...(summary.roundOff !== 0 ? [
-    {
-      label: 'Round Off',
-      val: (summary.roundOff > 0 ? '+ ' : '- ') + fmtINR(Math.abs(summary.roundOff)),
-      cls: 'text-gray-400',
-    },
-  ] : []),
-].map(({ label, val, cls }) => (
+            {[
+              { label:'Subtotal', val: fmtINR(summary.subtotal) },
+              ...(isGst ? [
+                { label:'CGST @ 1.5%', val: fmtINR(summary.cgst) },
+                { label:'SGST @ 1.5%', val: fmtINR(summary.sgst) },
+              ] : []),
+              ...(summary.exchangeValue > 0 ? [
+                { label:'Exchange Deduction', val:`- ${fmtINR(summary.exchangeValue)}`, cls:'text-green-600' },
+              ] : []),
+              ...(summary.roundOff !== 0 ? [
+                {
+                  label: 'Round Off',
+                  val: (summary.roundOff > 0 ? '+ ' : '- ') + fmtINR(Math.abs(summary.roundOff)),
+                  cls: 'text-gray-400',
+                },
+              ] : []),
+            ].map(({ label, val, cls }) => (
               <div key={label} className="flex justify-between">
                 <span className="text-gray-500">{label}</span>
                 <span className={`font-medium ${cls || ''}`}>{val}</span>
@@ -690,10 +673,6 @@ export default function Billing() {
 
             {/* Payment summary box */}
             <div className="bg-gray-50 rounded-xl p-3 space-y-1.5">
-              {/* <div className="flex justify-between text-sm">
-                <span className="font-slab text-gray-500">Cash Paid</span>
-                <span className="font-medium text-green-600">{fmtINR(paidAmount || 0)}</span>
-              </div> */}
               {advanceToUse > 0 && (
                 <div className="flex justify-between text-sm">
                   <span className="font-slab text-gray-500">Advance Used</span>

@@ -18,16 +18,13 @@ export const calcNetWeight = (gross, stone) =>
   Math.max(0, parseFloat(gross || 0) - parseFloat(stone || 0));
 
 // ── Single Item Total ────────────────────────
-// Used by both item cards (live display) and calcBill (summary)
-// so both always show identical numbers
-export const calcItemTotal = (item, goldRate, silverRate) => {
+// goldRate / silverRate HATA DIYE — ab har item apni rate.rate use karta hai
+export const calcItemTotal = (item) => {
   const metalType = (item.metalType || 'gold').toLowerCase();
   const net       = calcNetWeight(item.grossWeight, item.stoneWeight);
 
-  const activeRate =
-    metalType === 'gold'
-      ? parseFloat(goldRate  || 0)
-      : parseFloat(silverRate || 0);
+  // Per-item rate — billing form mein har item pe enter hoti hai
+  const activeRate = parseFloat(item.rate || 0);
 
   const metalValue   = net * activeRate;
   const stoneCharges = parseFloat(item.stoneCharges || 0);
@@ -35,12 +32,10 @@ export const calcItemTotal = (item, goldRate, silverRate) => {
   let making = 0;
 
   if (metalType === 'silver') {
-    // Silver → flat ₹ amount entered by user
+    // Silver → flat ₹ amount
     making = parseFloat(item.makingCharges || 0);
   } else {
     // Gold → percentage of metalValue
-    // Frontend stores the % value in item.makingCharges
-    // (payload transforms it to makingChargesPercent before sending to backend)
     const pct = parseFloat(
       item.makingChargesPercent !== undefined &&
       item.makingChargesPercent !== null &&
@@ -52,18 +47,17 @@ export const calcItemTotal = (item, goldRate, silverRate) => {
   }
 
   return {
-    metalValue:  +metalValue.toFixed(2),
-    makingValue: +making.toFixed(2),
+    metalValue:   +metalValue.toFixed(2),
+    makingValue:  +making.toFixed(2),
     stoneCharges: +stoneCharges.toFixed(2),
-    total:       +(metalValue + making + stoneCharges).toFixed(2),
+    total:        +(metalValue + making + stoneCharges).toFixed(2),
   };
 };
 
 // ── Billing Summary ──────────────────────────
+// goldRate / silverRate params HATA DIYE — calcItemTotal ab item.rate use karta hai
 export const calcBill = ({
   items = [],
-  goldRate = 0,
-  silverRate = 0,
   isGst = false,
   exchangeItems = [],
   discount = 0,
@@ -72,7 +66,7 @@ export const calcBill = ({
   let subtotal = 0;
 
   items.forEach(item => {
-    const { total } = calcItemTotal(item, goldRate, silverRate);
+    const { total } = calcItemTotal(item);
     subtotal += total;
   });
 
