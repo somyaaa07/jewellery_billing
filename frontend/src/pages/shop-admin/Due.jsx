@@ -18,7 +18,7 @@ export default function DuePage() {
   const [totals,   setTotals]   = useState({ due: 0, collected: 0 });
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
+  const [pagination, setPagination] = useState({ currentPage: 1, totalPages: 1, hasPrevPage: false, hasNextPage: false });
 
   
 
@@ -69,8 +69,7 @@ export default function DuePage() {
       setDues(withDues);
 
       // pagination from backend
-      setTotalPages(dueCustomerRes.data.pagination?.totalPages || 1);
-    })
+setPagination(dueCustomerRes.data.pagination || { currentPage: 1, totalPages: 1, hasPrevPage: false, hasNextPage: false })    })
     .catch(() => {})
     .finally(() => setLoading(false));
 }, [page, search]);
@@ -178,12 +177,13 @@ export default function DuePage() {
       </Card>
       <div className="flex items-center mt-10 justify-between">
           <p className=" font-sans text-sm text-gray-500">
-            Page {totalPages.currentPage || 1} of {totalPages.totalPages || 1}
+            Page {pagination.currentPage || 1} of {pagination.totalPages || 1}
+
           </p>
 
           <div className="flex gap-2">
             <button
-              disabled={!totalPages.hasPrevPage}
+              disabled={!pagination.hasPrevPage}
               onClick={() => setPage((p) => p - 1)}
               className=" font-sans px-3 py-1 border rounded  cursor-pointer disabled:opacity-50 bg-[#050A30] text-[#f5f3ee]"
             >
@@ -191,7 +191,7 @@ export default function DuePage() {
             </button>
 
             <button
-              disabled={!totalPages.hasNextPage}
+              disabled={!pagination.hasNextPage}
               onClick={() => setPage((p) => p + 1)}
               className=" font-sans px-3 py-1 border rounded  text-[#f5f3ee] bg-[#050A30] cursor-pointer disabled:opacity-50"
             >
