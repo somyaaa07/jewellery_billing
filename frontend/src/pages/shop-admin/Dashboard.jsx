@@ -46,7 +46,7 @@ export default function ShopDashboard() {
      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
   <StatCard
     title="Total Sales"
-    value={fmtINR(overview.totalRevenue)}
+value={fmtINR(overview.totalRevenue + overview.totalDue)}
     sub={`${overview.totalSalesCount || 0} invoices`}
     icon={IndianRupee}
     color="blue"
